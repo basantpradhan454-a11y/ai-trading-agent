@@ -1,1164 +1,1269 @@
 """
-Elite Trading Intelligence Engine — v5.1
-Futuristic UI | Clean Streamlit Architecture
+Trading Intelligence Engine — v6.0
+60% #0c1222 | 30% #0f1e35 | 10% #00d4ff / #7c3aed
+Futuristic dark fintech UI — clean Streamlit architecture
 """
 
 import streamlit as st
 import ccxt, pandas as pd, numpy as np
 import plotly.graph_objects as go
-import feedparser, re, uuid, os, datetime, json
+import feedparser, re, uuid, os, datetime, json, hashlib
 from cryptography.fernet import Fernet
 from passlib.context import CryptContext
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Text
+from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+# ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="TradeOS — Intelligence Engine",
+    page_title="Trading Intelligence Engine",
     page_icon="⬡",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
     menu_items={"Get Help": None, "Report a bug": None, "About": None}
 )
 
-# ── Database ────────────────────────────────────────────────────────────────
+# ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./trading.db")
-if DATABASE_URL.startswith("postgres://"): DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    pool_pre_ping=True
+)
 Base = declarative_base()
+SessionLocal = sessionmaker(bind=engine)
 
 class User(Base):
     __tablename__ = "users"
     id            = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     email         = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
+    full_name     = Column(String, default="")
+    strategy      = Column(String, default="Balanced")
     created_at    = Column(DateTime, default=datetime.datetime.utcnow)
 
 class ApiKey(Base):
     __tablename__ = "api_keys"
     id            = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id       = Column(String, nullable=False)
-    exchange      = Column(String)
-    enc_key       = Column(Text)
-    enc_secret    = Column(Text)
-    updated_at    = Column(DateTime, default=datetime.datetime.utcnow)
+    exchange      = Column(String, nullable=False)
+    api_key_enc   = Column(Text, nullable=False)
+    api_secret_enc= Column(Text, nullable=False)
+    created_at    = Column(DateTime, default=datetime.datetime.utcnow)
 
 class TradeLog(Base):
     __tablename__ = "trade_logs"
     id            = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id       = Column(String)
+    user_id       = Column(String, nullable=False)
     symbol        = Column(String)
     action        = Column(String)
     entry_price   = Column(Float)
     stop_loss     = Column(Float)
     take_profit   = Column(Float)
-    position_pct  = Column(Float)
-    rr            = Column(String)
+    size_pct      = Column(Float)
+    risk_reward   = Column(String)
     strategy      = Column(String)
+    status        = Column(String, default="demo")
     timestamp     = Column(DateTime, default=datetime.datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
-# ── Security ────────────────────────────────────────────────────────────────
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY") or Fernet.generate_key().decode()
-try:
-    fernet = Fernet(ENCRYPTION_KEY.encode() if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
-except Exception:
-    fernet = Fernet(Fernet.generate_key())
-
+# ── Security ──────────────────────────────────────────────────────────────────
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+RAW_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
+FERNET   = Fernet(RAW_KEY.encode() if isinstance(RAW_KEY, str) else RAW_KEY)
 
-def encrypt(text): return fernet.encrypt(text.encode()).decode()
-def decrypt(text):
-    try: return fernet.decrypt(text.encode()).decode()
-    except: return ""
-def hash_pw(pw): return pwd_ctx.hash(pw)
-def verify_pw(pw, h): return pwd_ctx.verify(pw, h)
+def hash_pw(p):  return pwd_ctx.hash(p)
+def verify_pw(p, h): return pwd_ctx.verify(p, h)
+def encrypt(v):  return FERNET.encrypt(v.encode()).decode()
+def decrypt(v):  return FERNET.decrypt(v.encode()).decode()
 
-# ── Global CSS ──────────────────────────────────────────────────────────────
-def inject_css():
-    st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
-    background: #030712 !important;
-    font-family: 'Inter', sans-serif !important;
-}
-
-/* Hide Streamlit chrome */
-#MainMenu, footer, header, [data-testid="stToolbar"],
-[data-testid="stDecoration"], [data-testid="stStatusWidget"] { display:none !important; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.3); border-radius: 4px; }
-
-/* Main block padding */
-[data-testid="stMainBlockContainer"] { padding: 0 !important; max-width: 100% !important; }
-.block-container { padding: 0 !important; max-width: 100% !important; }
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: rgba(3,7,18,0.97) !important;
-    border-right: 1px solid rgba(59,130,246,0.12) !important;
-}
-[data-testid="stSidebarNav"] { display: none; }
-
-/* Inputs */
-[data-testid="stTextInput"] input,
-[data-testid="stTextInputRootElement"] input {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    border-radius: 8px !important;
-    color: #f1f5f9 !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 14px !important;
-    padding: 12px 16px !important;
-    transition: border-color 0.2s !important;
-}
-[data-testid="stTextInput"] input:focus,
-[data-testid="stTextInputRootElement"] input:focus {
-    border-color: rgba(59,130,246,0.5) !important;
-    box-shadow: 0 0 0 3px rgba(59,130,246,0.1) !important;
-}
-
-/* Labels */
-[data-testid="stTextInput"] label p,
-[data-testid="stTextInputRootElement"] label p {
-    color: rgba(148,163,184,0.8) !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.5px !important;
-    text-transform: uppercase !important;
-}
-
-/* Buttons */
-[data-testid="stButton"] > button {
-    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    color: #fff !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 14px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.3px !important;
-    padding: 12px 24px !important;
-    width: 100% !important;
-    transition: all 0.2s !important;
-    cursor: pointer !important;
-}
-[data-testid="stButton"] > button:hover {
-    background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 8px 24px rgba(37,99,235,0.35) !important;
-}
-
-/* Selectbox */
-[data-testid="stSelectbox"] select,
-[data-testid="stSelectbox"] > div > div {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
-    border-radius: 8px !important;
-    color: #f1f5f9 !important;
-}
-
-/* Tabs */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    background: rgba(255,255,255,0.03) !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    gap: 2px !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab"] {
-    background: transparent !important;
-    border-radius: 7px !important;
-    color: rgba(148,163,184,0.7) !important;
-    font-weight: 500 !important;
-    font-size: 13px !important;
-    padding: 8px 20px !important;
-    border: none !important;
-}
-[data-testid="stTabs"] [aria-selected="true"] {
-    background: rgba(37,99,235,0.2) !important;
-    color: #60a5fa !important;
-    border: 1px solid rgba(37,99,235,0.3) !important;
-}
-
-/* Metrics */
-[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.06) !important;
-    border-radius: 12px !important;
-    padding: 16px !important;
-}
-[data-testid="stMetricLabel"] p { color: rgba(148,163,184,0.7) !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
-[data-testid="stMetricValue"] { color: #f1f5f9 !important; font-size: 22px !important; font-weight: 700 !important; font-family: 'JetBrains Mono', monospace !important; }
-
-/* Alert boxes */
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-    border-left-width: 3px !important;
-    background: rgba(255,255,255,0.03) !important;
-}
-
-/* Divider */
-hr { border-color: rgba(255,255,255,0.06) !important; }
-
-/* Spinner */
-[data-testid="stSpinner"] { color: #3b82f6 !important; }
-
-.mono { font-family: 'JetBrains Mono', monospace !important; }
-</style>
-""", unsafe_allow_html=True)
-
-# ── Session State ────────────────────────────────────────────────────────────
-def init_state():
-    for k, v in {"logged_in": False, "user_id": None, "user_email": None, "active_page": "dashboard"}.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
-
-# ── Risk Validation Layer ────────────────────────────────────────────────────
-MAX_POSITION_PCT = 5.0
-MAX_SL_PCT       = 2.0
-MIN_TP_PCT       = 5.0
-MIN_RR           = 2.0
-MAX_DAILY_LOSS   = 10.0
+# ── Risk Limits (hard-coded, AI cannot override) ──────────────────────────────
+MAX_POSITION_PCT  = 5.0
+MAX_SL_PCT        = 2.0
+MIN_TP_PCT        = 5.0
+MIN_RR            = 2.0
+MAX_DAILY_LOSS_PCT= 10.0
 
 def validate_trade(action, entry, sl, tp, size_pct):
     issues = []
-    if size_pct > MAX_POSITION_PCT: issues.append(f"Position {size_pct}% > max {MAX_POSITION_PCT}%")
-    if size_pct <= 0:               issues.append("Position size must be > 0")
-    sl_dist = abs((entry - sl) / entry) * 100 if entry else 0
-    if sl_dist > MAX_SL_PCT:        issues.append(f"Stop-loss distance {sl_dist:.2f}% > max {MAX_SL_PCT}%")
-    if action == "BUY"  and sl >= entry: issues.append("SL must be below entry for BUY")
-    if action == "SELL" and sl <= entry: issues.append("SL must be above entry for SELL")
+    action = action.upper()
+    if size_pct > MAX_POSITION_PCT:
+        issues.append(f"Position {size_pct}% > max {MAX_POSITION_PCT}%")
+    sl_dist = abs(entry - sl) / entry * 100
+    if sl_dist > MAX_SL_PCT:
+        issues.append(f"Stop-loss distance {sl_dist:.2f}% > max {MAX_SL_PCT}%")
+    if action == "BUY" and (sl >= entry or tp <= entry):
+        issues.append("BUY: SL must be below entry, TP above entry")
+    if action == "SELL" and (sl <= entry or tp >= entry):
+        issues.append("SELL: SL must be above entry, TP below entry")
     risk   = abs(entry - sl)
     reward = abs(tp - entry)
-    rr     = round(reward / risk, 2) if risk else 0
-    if rr < MIN_RR: issues.append(f"R:R {rr} below minimum 1:{MIN_RR}")
-    valid = len(issues) == 0
-    order = {"action": action, "entry": entry, "sl": sl, "tp": tp,
-             "size_pct": size_pct, "risk_reward": f"1:{rr}"} if valid else {}
-    return valid, issues, order
+    rr     = reward / risk if risk > 0 else 0
+    if rr < MIN_RR:
+        issues.append(f"R:R {rr:.2f} below minimum 1:{MIN_RR}")
+    is_valid = len(issues) == 0
+    order = {
+        "action": action, "entry_price": entry, "stop_loss": sl,
+        "take_profit": tp, "size_pct": size_pct,
+        "risk_reward": f"1:{round(rr, 1)}"
+    } if is_valid else {}
+    return is_valid, issues, order
 
-# ── Market Data ──────────────────────────────────────────────────────────────
-@st.cache_data(ttl=60)
-def fetch_ohlcv(symbol="BTC/USDT", timeframe="1h", limit=200):
+# ── Global CSS — 60/30/10 Rule ────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* === 60% — Base Background === */
+html, body, .stApp, [data-testid="stAppViewContainer"] {
+    background: #0c1222 !important;
+    font-family: 'Inter', sans-serif !important;
+    color: #c8d6e8 !important;
+}
+
+/* === 30% — Secondary Surface === */
+[data-testid="stSidebar"] {
+    background: #0f1e35 !important;
+    border-right: 1px solid rgba(0,212,255,0.12) !important;
+}
+[data-testid="stSidebar"] * { color: #c8d6e8 !important; }
+
+/* Block container */
+[data-testid="stMainBlockContainer"] {
+    padding-top: 1.5rem !important;
+}
+
+/* === Cards (30% secondary) === */
+.tic-card {
+    background: #0f1e35;
+    border: 1px solid rgba(0,212,255,0.12);
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin-bottom: 16px;
+    transition: border-color .2s;
+}
+.tic-card:hover { border-color: rgba(0,212,255,0.28); }
+
+/* Auth card */
+.auth-card {
+    background: #0f1e35;
+    border: 1px solid rgba(0,212,255,0.18);
+    border-radius: 18px;
+    padding: 40px 36px;
+}
+
+/* Auth branding */
+.auth-brand {
+    padding: 40px 20px;
+}
+
+/* === 10% — Cyan Accent === */
+.accent { color: #00d4ff !important; }
+.accent-purple { color: #7c3aed !important; }
+
+/* Metric tiles */
+.metric-tile {
+    background: #0f1e35;
+    border: 1px solid rgba(0,212,255,0.1);
+    border-radius: 12px;
+    padding: 18px 20px;
+    text-align: center;
+}
+.metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.7rem;
+    font-weight: 600;
+    color: #00d4ff;
+    display: block;
+}
+.metric-label {
+    font-size: 0.72rem;
+    color: #5a7a9a;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+/* Section headers */
+.section-header {
+    font-size: 0.7rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #00d4ff;
+    font-weight: 600;
+    margin-bottom: 6px;
+    border-left: 3px solid #00d4ff;
+    padding-left: 10px;
+}
+
+/* === 10% — Buttons === */
+.stButton > button {
+    background: linear-gradient(135deg, #00d4ff, #0090c4) !important;
+    color: #0c1222 !important;
+    font-weight: 700 !important;
+    font-size: 0.88rem !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 12px 28px !important;
+    letter-spacing: .04em !important;
+    transition: all .2s !important;
+    width: 100%;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #00eaff, #00b8e6) !important;
+    box-shadow: 0 0 24px rgba(0,212,255,0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Tabs */
+[data-testid="stTabs"] [role="tab"] {
+    background: transparent !important;
+    color: #5a7a9a !important;
+    border: none !important;
+    font-weight: 500;
+    font-size: 0.9rem;
+    padding: 10px 20px !important;
+    border-bottom: 2px solid transparent !important;
+}
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+    color: #00d4ff !important;
+    border-bottom: 2px solid #00d4ff !important;
+    background: transparent !important;
+}
+[data-testid="stTabs"] [role="tablist"] {
+    border-bottom: 1px solid rgba(0,212,255,0.12) !important;
+    gap: 4px;
+}
+
+/* Inputs */
+.stTextInput > div > div > input,
+.stSelectbox > div > div,
+.stNumberInput > div > div > input {
+    background: rgba(0,212,255,0.04) !important;
+    border: 1px solid rgba(0,212,255,0.18) !important;
+    border-radius: 10px !important;
+    color: #e2eaf4 !important;
+    font-size: 0.9rem !important;
+    padding: 10px 14px !important;
+}
+.stTextInput > div > div > input:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: rgba(0,212,255,0.5) !important;
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.1) !important;
+}
+.stTextInput > label, .stSelectbox > label, .stNumberInput > label {
+    color: #5a7a9a !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    letter-spacing: .06em !important;
+    text-transform: uppercase;
+}
+
+/* Sidebar nav radio */
+[data-testid="stSidebar"] .stRadio > div {
+    gap: 4px !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    background: rgba(0,212,255,0.04);
+    border: 1px solid rgba(0,212,255,0.08);
+    border-radius: 10px;
+    padding: 10px 16px !important;
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: #8aafc8 !important;
+    transition: all .18s;
+    width: 100%;
+    display: block;
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    border-color: rgba(0,212,255,0.3);
+    color: #00d4ff !important;
+    background: rgba(0,212,255,0.08);
+}
+
+/* Selectbox */
+.stSelectbox [data-baseweb="select"] > div {
+    background: rgba(0,212,255,0.04) !important;
+    border: 1px solid rgba(0,212,255,0.18) !important;
+    border-radius: 10px !important;
+}
+
+/* Forms */
+[data-testid="stForm"] {
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"] {
+    background: #0f1e35 !important;
+    border-radius: 12px !important;
+}
+
+/* Hide Streamlit chrome */
+#MainMenu, footer, header,
+[data-testid="stDecoration"],
+[data-testid="stToolbar"]  { display:none !important; }
+
+/* Divider */
+hr { border-color: rgba(0,212,255,0.1) !important; margin: 20px 0 !important; }
+
+/* Alert / info boxes */
+.stAlert { border-radius: 10px !important; }
+[data-testid="stNotification"] { border-radius: 10px !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #0c1222; }
+::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.25); border-radius: 3px; }
+
+/* Badge */
+.badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    letter-spacing: .06em;
+}
+.badge-bull { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.badge-bear { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+.badge-neut { background: rgba(0,212,255,0.1);   color: #00d4ff; border: 1px solid rgba(0,212,255,0.3); }
+
+/* Report sections */
+.report-section {
+    background: #0f1e35;
+    border: 1px solid rgba(124,58,237,0.2);
+    border-left: 3px solid #7c3aed;
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 18px;
+}
+.report-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    color: #7c3aed;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.report-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #e2eaf4;
+    margin-top: 2px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ── Session State ─────────────────────────────────────────────────────────────
+for k, v in [("user", None), ("page", "Dashboard"), ("daily_pnl", 0.0), ("shutdown", False)]:
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# ── Market Data ───────────────────────────────────────────────────────────────
+SYMBOLS = ["BTC/USDT","ETH/USDT","BNB/USDT","SOL/USDT","XRP/USDT",
+           "ADA/USDT","AVAX/USDT","DOGE/USDT","MATIC/USDT","DOT/USDT"]
+
+@st.cache_data(ttl=90)
+def fetch_ohlcv(symbol="BTC/USDT", tf="1h", limit=200):
     try:
         ex = ccxt.binance({"enableRateLimit": True})
-        raw = ex.fetch_ohlcv(symbol, timeframe, limit=limit)
-        df  = pd.DataFrame(raw, columns=["ts","open","high","low","close","volume"])
+        raw = ex.fetch_ohlcv(symbol, tf, limit=limit)
+        df = pd.DataFrame(raw, columns=["ts","open","high","low","close","volume"])
         df["ts"] = pd.to_datetime(df["ts"], unit="ms")
         return df
-    except:
+    except Exception:
         np.random.seed(42)
-        dates = pd.date_range(end=datetime.datetime.utcnow(), periods=limit, freq="1h")
-        base  = 65000
-        close = base + np.cumsum(np.random.randn(limit) * 300)
-        return pd.DataFrame({"ts": dates,"open": close - 200,"high": close + 400,"low": close - 400,"close": close,"volume": np.random.randint(800,3000,limit).astype(float)})
+        n = limit
+        base = 65000 if "BTC" in symbol else 3500
+        closes = base + np.cumsum(np.random.randn(n) * base * 0.008)
+        df = pd.DataFrame({
+            "ts":     pd.date_range("2024-01-01", periods=n, freq="1h"),
+            "open":   closes * (1 - np.random.rand(n) * 0.005),
+            "high":   closes * (1 + np.random.rand(n) * 0.01),
+            "low":    closes * (1 - np.random.rand(n) * 0.01),
+            "close":  closes,
+            "volume": np.random.randint(500, 5000, n).astype(float)
+        })
+        return df
 
-def compute_indicators(df):
+def calc_indicators(df):
     c = df["close"]
+    # EMA
     df["ema20"]  = c.ewm(span=20).mean()
     df["ema50"]  = c.ewm(span=50).mean()
     df["ema200"] = c.ewm(span=200).mean()
-    df["bb_mid"] = c.rolling(20).mean()
-    df["bb_std"] = c.rolling(20).std()
-    df["bb_up"]  = df["bb_mid"] + 2 * df["bb_std"]
-    df["bb_lo"]  = df["bb_mid"] - 2 * df["bb_std"]
+    # RSI
     delta = c.diff()
-    gain  = delta.clip(lower=0).rolling(14).mean()
-    loss  = (-delta.clip(upper=0)).rolling(14).mean()
-    rs    = gain / loss.replace(0, 1e-10)
-    df["rsi"] = 100 - (100 / (1 + rs))
+    gain  = delta.clip(lower=0).ewm(span=14).mean()
+    loss  = (-delta.clip(upper=0)).ewm(span=14).mean()
+    df["rsi"] = 100 - 100/(1+gain/loss.replace(0, 1e-9))
+    # MACD
     ema12 = c.ewm(span=12).mean()
     ema26 = c.ewm(span=26).mean()
     df["macd"]   = ema12 - ema26
     df["signal"] = df["macd"].ewm(span=9).mean()
     df["hist"]   = df["macd"] - df["signal"]
+    # Bollinger
+    sma20        = c.rolling(20).mean()
+    std20        = c.rolling(20).std()
+    df["bb_mid"] = sma20
+    df["bb_up"]  = sma20 + 2 * std20
+    df["bb_low"] = sma20 - 2 * std20
+    # Volume MA
+    df["vol_ma"] = df["volume"].rolling(20).mean()
+    # S/R levels
+    recent = df.tail(50)
+    df.attrs["support"]    = round(float(recent["low"].min()), 2)
+    df.attrs["resistance"] = round(float(recent["high"].max()), 2)
     return df
 
-@st.cache_data(ttl=300)
-def fetch_news(query="crypto trading market"):
-    feeds = [
-        f"https://news.google.com/rss/search?q={query.replace(' ','+')}&hl=en-US&gl=US&ceid=US:en",
-        "https://feeds.feedburner.com/CoinDesk",
-        "https://cointelegraph.com/rss",
-        "https://www.investing.com/rss/news.rss"
-    ]
+def get_signal(df):
+    last = df.iloc[-1]
+    score = 0
+    reasons = []
+    if last["rsi"] < 35:   score += 2; reasons.append("RSI oversold")
+    elif last["rsi"] > 65: score -= 2; reasons.append("RSI overbought")
+    if last["macd"] > last["signal"]: score += 1; reasons.append("MACD bullish crossover")
+    else:                             score -= 1; reasons.append("MACD bearish")
+    if last["close"] > last["ema20"] > last["ema50"]: score += 1; reasons.append("Price above EMA stack")
+    elif last["close"] < last["ema20"] < last["ema50"]: score -= 1; reasons.append("Price below EMA stack")
+    if last["volume"] > last["vol_ma"] * 1.4: score += 1; reasons.append("Volume spike detected")
+    if last["close"] < last["bb_low"]: score += 1; reasons.append("Below lower Bollinger Band")
+    elif last["close"] > last["bb_up"]: score -= 1; reasons.append("Above upper Bollinger Band")
+
+    if score >= 3:   sig = "STRONG BUY"
+    elif score >= 1: sig = "BUY"
+    elif score <= -3:sig = "STRONG SELL"
+    elif score <= -1:sig = "SELL"
+    else:            sig = "NEUTRAL"
+    return sig, score, reasons
+
+# ── News Engine ───────────────────────────────────────────────────────────────
+NEWS_FEEDS = [
+    "https://cointelegraph.com/rss",
+    "https://feeds.coindesk.com/rss",
+    "https://cryptopanic.com/news/rss/",
+    "https://bitcoinmagazine.com/.rss/full/",
+]
+
+@st.cache_data(ttl=600)
+def fetch_news(query="crypto", limit=15):
     articles = []
-    for url in feeds:
+    for url in NEWS_FEEDS:
         try:
             feed = feedparser.parse(url)
-            for e in feed.entries[:4]:
-                title   = e.get("title","")
-                summary = e.get("summary", e.get("description",""))[:200]
-                pos = sum(title.lower().count(w) for w in ["rally","surge","bull","gains","rise","breakout","buy","growth","up"])
-                neg = sum(title.lower().count(w) for w in ["crash","dump","bear","loss","fall","risk","sell","drop","down","fear"])
-                score = min(5, max(-5, pos * 1.5 - neg * 1.5))
-                articles.append({"title": title[:90], "summary": summary, "score": round(score,1), "source": url.split("/")[2][:20]})
-        except:
+            for e in feed.entries[:5]:
+                t = e.get("title","")
+                s = e.get("summary","")[:200]
+                d = e.get("published","")
+                articles.append({"title":t,"summary":s,"date":d,"source":url.split("/")[2]})
+        except Exception:
             pass
-    return articles[:16]
+    # sentiment score
+    pos = ["bull","buy","surge","rally","gain","breakout","record","high","adoption","ETF","approval"]
+    neg = ["bear","sell","crash","drop","fall","hack","ban","risk","loss","FUD","SEC","decline"]
+    q = query.lower()
+    scored = []
+    for a in articles:
+        txt = (a["title"]+" "+a["summary"]).lower()
+        if q not in txt and q not in a["source"]:
+            pass  # still include all news for breadth
+        sc = sum(1 for w in pos if w in txt) - sum(1 for w in neg if w in txt)
+        sc = max(-5, min(5, sc))
+        a["score"] = sc
+        scored.append(a)
+    return scored[:limit]
 
-def sentiment_color(score):
-    if score >= 3:   return "#10b981"
-    elif score >= 1: return "#34d399"
-    elif score <= -3:return "#ef4444"
-    elif score <= -1:return "#f87171"
-    return "#94a3b8"
-
-def support_resistance(df, n=5):
-    highs  = df["high"].nlargest(n).values
-    lows   = df["low"].nsmallest(n).values
-    resist = sorted(set(round(h,-2) for h in highs), reverse=True)[:3]
-    supp   = sorted(set(round(l,-2) for l in lows))[:3]
-    return supp, resist
-
-# ── Chart Engine ─────────────────────────────────────────────────────────────
+# ── Chart ─────────────────────────────────────────────────────────────────────
 def build_chart(df, symbol):
-    supp, resist = support_resistance(df)
     fig = go.Figure()
-
-    # Candlesticks
+    # Candles
     fig.add_trace(go.Candlestick(
         x=df["ts"], open=df["open"], high=df["high"], low=df["low"], close=df["close"],
-        name=symbol,
-        increasing_fillcolor="#10b981", increasing_line_color="#10b981",
-        decreasing_fillcolor="#ef4444", decreasing_line_color="#ef4444",
-        line_width=1
+        name="Price",
+        increasing=dict(fillcolor="#10b981", line=dict(color="#10b981", width=1)),
+        decreasing=dict(fillcolor="#ef4444", line=dict(color="#ef4444", width=1)),
     ))
-
     # EMAs
-    for col, color, name in [("ema20","#3b82f6","EMA 20"),("ema50","#f59e0b","EMA 50"),("ema200","#8b5cf6","EMA 200")]:
-        fig.add_trace(go.Scatter(x=df["ts"], y=df[col], name=name, line=dict(color=color, width=1.2), opacity=0.85))
-
-    # Bollinger
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["bb_up"], name="BB Upper", line=dict(color="rgba(148,163,184,0.3)", width=1, dash="dot")))
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["bb_lo"], name="BB Lower", line=dict(color="rgba(148,163,184,0.3)", width=1, dash="dot"), fill="tonexty", fillcolor="rgba(148,163,184,0.04)"))
-
-    # S/R lines
-    for level in supp:
-        fig.add_hline(y=level, line_color="rgba(16,185,129,0.5)", line_width=1, line_dash="dash", annotation_text=f"S {level:,.0f}", annotation_font_color="rgba(16,185,129,0.8)", annotation_font_size=11)
-    for level in resist:
-        fig.add_hline(y=level, line_color="rgba(239,68,68,0.5)", line_width=1, line_dash="dash", annotation_text=f"R {level:,.0f}", annotation_font_color="rgba(239,68,68,0.8)", annotation_font_size=11)
-
+    for col, clr, nm in [("ema20","#00d4ff","EMA20"),("ema50","#7c3aed","EMA50"),("ema200","#f59e0b","EMA200")]:
+        fig.add_trace(go.Scatter(x=df["ts"], y=df[col], line=dict(color=clr,width=1.2), name=nm, opacity=0.7))
+    # BB
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["bb_up"],  line=dict(color="rgba(0,212,255,0.3)",width=1), name="BB Upper", fill=None))
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["bb_low"], line=dict(color="rgba(0,212,255,0.3)",width=1), name="BB Lower",
+                             fill="tonexty", fillcolor="rgba(0,212,255,0.04)"))
+    # S/R
+    fig.add_hline(y=df.attrs["support"],    line=dict(color="rgba(16,185,129,0.5)",  dash="dash", width=1), annotation_text="Support")
+    fig.add_hline(y=df.attrs["resistance"], line=dict(color="rgba(239,68,68,0.5)",   dash="dash", width=1), annotation_text="Resistance")
     fig.update_layout(
-        height=440,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.01)",
-        font=dict(family="Inter", color="#94a3b8", size=11),
-        legend=dict(orientation="h", y=1.05, x=0, bgcolor="transparent", font_size=11),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.03)", showline=False, zeroline=False, rangeslider_visible=False, color="#64748b"),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", showline=False, zeroline=False, side="right", color="#64748b"),
-        hovermode="x unified",
-        hoverlabel=dict(bgcolor="rgba(3,7,18,0.95)", bordercolor="rgba(59,130,246,0.3)", font_size=12, font_family="JetBrains Mono"),
-        margin=dict(l=0, r=60, t=20, b=0),
+        template="plotly_dark",
+        paper_bgcolor="rgba(12,18,34,0)",
+        plot_bgcolor ="rgba(15,30,53,0.5)",
+        margin=dict(l=0,r=0,t=28,b=0),
+        height=400,
+        font=dict(family="Inter", color="#8aafc8", size=11),
+        xaxis=dict(gridcolor="rgba(0,212,255,0.05)", showline=False, zeroline=False, rangeslider_visible=False),
+        yaxis=dict(gridcolor="rgba(0,212,255,0.05)", showline=False, zeroline=False, side="right"),
+        legend=dict(bgcolor="rgba(15,30,53,0.7)", bordercolor="rgba(0,212,255,0.15)", borderwidth=1, font_size=10),
+        hoverlabel=dict(bgcolor="rgba(12,18,34,0.95)", bordercolor="rgba(0,212,255,0.3)", font_size=11),
+        title=dict(text=f"{symbol} — Technical Chart", font=dict(size=13, color="#e2eaf4"), x=0),
     )
     return fig
 
-def build_rsi_chart(df):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["rsi"], name="RSI", line=dict(color="#3b82f6", width=1.5)))
-    fig.add_hline(y=70, line_color="rgba(239,68,68,0.5)", line_dash="dash", annotation_text="OB 70", annotation_font_size=10)
-    fig.add_hline(y=30, line_color="rgba(16,185,129,0.5)", line_dash="dash", annotation_text="OS 30", annotation_font_size=10)
-    fig.update_layout(height=150, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.01)",
-        font=dict(family="Inter", color="#94a3b8", size=10),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.03)", showline=False, zeroline=False, rangeslider_visible=False),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", showline=False, zeroline=False, range=[0,100], side="right"),
-        margin=dict(l=0, r=60, t=10, b=0), showlegend=False)
-    return fig
-
-def build_macd_chart(df):
-    colors = ["#10b981" if v >= 0 else "#ef4444" for v in df["hist"]]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=df["ts"], y=df["hist"], marker_color=colors, name="Histogram", opacity=0.7))
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["macd"], name="MACD", line=dict(color="#3b82f6", width=1.2)))
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["signal"], name="Signal", line=dict(color="#f59e0b", width=1.2)))
-    fig.update_layout(height=150, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.01)",
-        font=dict(family="Inter", color="#94a3b8", size=10),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.03)", showline=False, zeroline=False, rangeslider_visible=False),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", showline=False, zeroline=False, side="right"),
-        margin=dict(l=0, r=60, t=10, b=0), showlegend=False, barmode="relative")
+def build_volume_chart(df):
+    colors = ["#10b981" if r["close"]>=r["open"] else "#ef4444" for _, r in df.iterrows()]
+    fig = go.Figure(go.Bar(x=df["ts"], y=df["volume"], marker_color=colors, name="Volume"))
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["vol_ma"], line=dict(color="#00d4ff",width=1.2), name="Vol MA20"))
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(12,18,34,0)",
+        plot_bgcolor ="rgba(15,30,53,0.5)",
+        margin=dict(l=0,r=0,t=0,b=0), height=150,
+        font=dict(family="Inter", color="#8aafc8", size=10),
+        xaxis=dict(gridcolor="rgba(0,212,255,0.05)", showline=False, zeroline=False),
+        yaxis=dict(gridcolor="rgba(0,212,255,0.05)", showline=False, zeroline=False, side="right"),
+        showlegend=False, bargap=0.15,
+    )
     return fig
 
 # ── Auth Page ─────────────────────────────────────────────────────────────────
 def page_auth():
-    # Full-page auth layout via CSS + st.columns
-    st.markdown("""
-<style>
-.auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
-.auth-brand-label {
-    display: inline-block;
-    background: rgba(37,99,235,0.1);
-    border: 1px solid rgba(37,99,235,0.25);
-    border-radius: 6px;
-    padding: 5px 14px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    color: #60a5fa;
-    text-transform: uppercase;
-    margin-bottom: 28px;
-}
-.auth-title {
-    font-size: 40px;
-    font-weight: 800;
-    color: #f1f5f9;
-    line-height: 1.15;
-    letter-spacing: -1.5px;
-    margin-bottom: 16px;
-}
-.auth-title span { color: #3b82f6; }
-.auth-subtitle {
-    font-size: 14px;
-    color: rgba(148,163,184,0.75);
-    line-height: 1.6;
-    margin-bottom: 40px;
-}
-.auth-feature {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    color: rgba(148,163,184,0.8);
-    font-size: 13px;
-}
-.auth-dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; flex-shrink: 0; }
-.auth-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 20px;
-    padding: 40px 36px;
-    backdrop-filter: blur(20px);
-}
-.auth-card-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #f1f5f9;
-    margin-bottom: 6px;
-}
-.auth-card-sub {
-    font-size: 13px;
-    color: rgba(148,163,184,0.65);
-    margin-bottom: 28px;
-}
-.auth-divider {
-    text-align: center;
-    color: rgba(148,163,184,0.4);
-    font-size: 11px;
-    letter-spacing: 1px;
-    margin: 16px 0;
-    position: relative;
-}
-.trust-bar {
-    margin-top: 24px;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-}
-.trust-item { font-size: 11px; color: rgba(148,163,184,0.5); letter-spacing: 0.3px; }
-</style>
-""", unsafe_allow_html=True)
+    col_brand, col_gap, col_form = st.columns([1.05, 0.1, 0.85])
 
-    col_brand, col_gap, col_card = st.columns([1.1, 0.15, 0.85])
-
+    # ── Left Branding ────────────────────────────────────────────────────────
     with col_brand:
-        st.markdown("""
-<div style="padding: 60px 40px 60px 20px; min-height: 80vh; display: flex; flex-direction: column; justify-content: center;">
-    <div class="auth-brand-label">Live since 2024</div>
-    <div class="auth-title">Trading<br><span>Intelligence</span><br>Engine</div>
-    <div class="auth-subtitle">
-        Institutional-grade market analysis with real-time TA/FA fusion,
-        AI-driven trade theses, and a hard-coded risk validation layer.
-    </div>
-    <div class="auth-feature"><div class="auth-dot"></div> RSI · MACD · Bollinger Bands — live technical suite</div>
-    <div class="auth-feature"><div class="auth-dot"></div> News sentiment scoring with impact analysis</div>
-    <div class="auth-feature"><div class="auth-dot"></div> White Paper report — professional 5-section document</div>
-    <div class="auth-feature"><div class="auth-dot"></div> AES-256 encrypted API key storage</div>
-    <div class="auth-feature"><div class="auth-dot"></div> Hard-coded risk limits — 5% position · 2% SL · 1:2 R:R</div>
-    <div class="trust-bar">
-        <div class="trust-item">AES-256 Encryption</div>
-        <div class="trust-item">bcrypt Auth</div>
-        <div class="trust-item">Demo-first Mode</div>
-        <div class="trust-item">No plaintext keys</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
 
-    with col_card:
         st.markdown("""
-<div style="padding: 60px 20px 60px 40px; min-height: 80vh; display: flex; flex-direction: column; justify-content: center;">
-    <div class="auth-card">
-""", unsafe_allow_html=True)
+        <div style="
+            display:inline-block;
+            background: rgba(0,212,255,0.08);
+            border: 1px solid rgba(0,212,255,0.22);
+            border-radius: 8px;
+            padding: 5px 14px;
+            font-size: 0.72rem;
+            letter-spacing: .12em;
+            color: #00d4ff;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 28px;
+        ">⬡ &nbsp;INSTITUTIONAL GRADE PLATFORM</div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <h1 style="
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1.15;
+            color: #e2eaf4;
+            margin: 0 0 10px 0;
+        ">Trading<br><span style="color:#00d4ff;">Intelligence</span><br>Engine</h1>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <p style="font-size:0.92rem; color:#5a7a9a; max-width:400px; line-height:1.7; margin:16px 0 36px 0;">
+        Institutional-grade market analysis powered by real-time TA/FA fusion,
+        AI-driven trade theses, and a hard-coded risk validation layer.
+        </p>
+        """, unsafe_allow_html=True)
+
+        features = [
+            ("RSI · MACD · Bollinger Bands", "Live technical analysis suite"),
+            ("News Sentiment Engine",         "Real-time impact scoring −5 to +5"),
+            ("White Paper Report",            "5-section institutional document"),
+            ("AES-256 Encryption",            "No plaintext API keys ever"),
+            ("Risk Validation Layer",         "5% position · 2% SL · 1:2 R:R"),
+        ]
+        for title, desc in features:
+            st.markdown(f"""
+            <div style="display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;">
+                <div style="
+                    width:8px; height:8px; border-radius:50%;
+                    background:#00d4ff;
+                    box-shadow: 0 0 10px rgba(0,212,255,0.6);
+                    margin-top:6px; flex-shrink:0;
+                "></div>
+                <div>
+                    <div style="font-size:0.88rem; font-weight:600; color:#c8d6e8;">{title}</div>
+                    <div style="font-size:0.78rem; color:#4a6a8a; margin-top:1px;">{desc}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display:flex; gap:24px; flex-wrap:wrap;">
+            <span style="font-size:0.72rem; color:#304a66; letter-spacing:.06em;">AES-256 ENCRYPTION</span>
+            <span style="font-size:0.72rem; color:#304a66; letter-spacing:.06em;">BCRYPT AUTH</span>
+            <span style="font-size:0.72rem; color:#304a66; letter-spacing:.06em;">DEMO-FIRST MODE</span>
+            <span style="font-size:0.72rem; color:#304a66; letter-spacing:.06em;">NO PLAINTEXT KEYS</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Right Form Card ───────────────────────────────────────────────────────
+    with col_form:
+        st.markdown("<div style='height:60px'></div>", unsafe_allow_html=True)
+
+        # Card container
+        st.markdown("""
+        <div style="
+            background: #0f1e35;
+            border: 1px solid rgba(0,212,255,0.18);
+            border-radius: 18px;
+            padding: 36px 32px 28px 32px;
+        ">
+        <div style="
+            font-size:0.68rem; letter-spacing:.14em; color:#00d4ff;
+            font-weight:600; text-transform:uppercase; margin-bottom:6px;
+        ">ACCESS PORTAL</div>
+        <div style="font-size:1.25rem; font-weight:700; color:#e2eaf4; margin-bottom:24px;">
+            Sign in to your account
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         tab_in, tab_up = st.tabs(["Sign In", "Create Account"])
 
+        # ── Sign In ──
         with tab_in:
-            st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
-            with st.form("login_form", clear_on_submit=False):
-                email_in = st.text_input("Email address", placeholder="you@example.com", key="li_email")
-                pass_in  = st.text_input("Password", type="password", placeholder="Enter your password", key="li_pass")
-                st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
-                submitted = st.form_submit_button("Sign In")
-                if submitted:
-                    if not email_in or not pass_in:
-                        st.error("Please fill in all fields.")
-                    else:
-                        db = SessionLocal()
-                        user = db.query(User).filter(User.email == email_in.lower().strip()).first()
-                        db.close()
-                        if user and verify_pw(pass_in, user.password_hash):
-                            st.session_state.logged_in = True
-                            st.session_state.user_id   = user.id
-                            st.session_state.user_email= user.email
+            st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+            with st.form("form_login", clear_on_submit=False):
+                email    = st.text_input("Email Address", placeholder="you@example.com", key="li_email")
+                password = st.text_input("Password",      placeholder="Enter your password", type="password", key="li_pw")
+                submit   = st.form_submit_button("Sign In", use_container_width=True)
+
+            if submit:
+                if not email or not password:
+                    st.error("Please fill in all fields.")
+                else:
+                    db = SessionLocal()
+                    try:
+                        user = db.query(User).filter(User.email == email.lower().strip()).first()
+                        if user and verify_pw(password, user.password_hash):
+                            st.session_state.user = {
+                                "id": user.id, "email": user.email,
+                                "name": user.full_name or email.split("@")[0],
+                                "strategy": user.strategy
+                            }
+                            st.success("Signed in successfully.")
                             st.rerun()
                         else:
-                            st.error("Invalid credentials.")
+                            st.error("Invalid email or password.")
+                    except Exception as e:
+                        st.error(f"Sign in error: {e}")
+                    finally:
+                        db.close()
 
+        # ── Create Account ──
         with tab_up:
-            st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
-            with st.form("signup_form", clear_on_submit=False):
-                email_up  = st.text_input("Email address", placeholder="you@example.com", key="su_email")
-                pass_up   = st.text_input("Password", type="password", placeholder="Create a password", key="su_pass")
-                pass_up2  = st.text_input("Confirm password", type="password", placeholder="Repeat your password", key="su_pass2")
-                st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
-                submitted2 = st.form_submit_button("Create Account")
-                if submitted2:
-                    if not email_up or not pass_up or not pass_up2:
-                        st.error("Please fill in all fields.")
-                    elif pass_up != pass_up2:
-                        st.error("Passwords do not match.")
-                    elif len(pass_up) < 8:
-                        st.error("Password must be at least 8 characters.")
-                    else:
-                        db = SessionLocal()
-                        exists = db.query(User).filter(User.email == email_up.lower().strip()).first()
+            st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+            with st.form("form_signup", clear_on_submit=False):
+                full_name = st.text_input("Full Name",         placeholder="Your full name",       key="su_name")
+                su_email  = st.text_input("Email Address",     placeholder="you@example.com",      key="su_email")
+                su_pw     = st.text_input("Password",          placeholder="Min 8 characters",     type="password", key="su_pw")
+                su_pw2    = st.text_input("Confirm Password",  placeholder="Repeat your password", type="password", key="su_pw2")
+                strategy  = st.selectbox("Trading Strategy", ["Balanced","Conservative","Aggressive"], key="su_strat")
+                register  = st.form_submit_button("Create Account", use_container_width=True)
+
+            if register:
+                errs = []
+                if not full_name:             errs.append("Full name is required.")
+                if not su_email or "@" not in su_email: errs.append("Valid email is required.")
+                if len(su_pw) < 8:            errs.append("Password must be at least 8 characters.")
+                if su_pw != su_pw2:           errs.append("Passwords do not match.")
+
+                if errs:
+                    for e in errs:
+                        st.error(e)
+                else:
+                    db = SessionLocal()
+                    try:
+                        exists = db.query(User).filter(User.email == su_email.lower().strip()).first()
                         if exists:
-                            db.close()
-                            st.error("Email already registered.")
+                            st.error("An account with this email already exists.")
                         else:
-                            new_user = User(email=email_up.lower().strip(), password_hash=hash_pw(pass_up))
+                            new_user = User(
+                                email=su_email.lower().strip(),
+                                password_hash=hash_pw(su_pw),
+                                full_name=full_name.strip(),
+                                strategy=strategy
+                            )
                             db.add(new_user)
                             db.commit()
                             db.refresh(new_user)
-                            st.session_state.logged_in = True
-                            st.session_state.user_id   = new_user.id
-                            st.session_state.user_email= new_user.email
-                            db.close()
+                            st.session_state.user = {
+                                "id": new_user.id, "email": new_user.email,
+                                "name": new_user.full_name,
+                                "strategy": new_user.strategy
+                            }
+                            st.success("Account created! Welcome aboard.")
                             st.rerun()
+                    except Exception as e:
+                        st.error(f"Registration error: {e}")
+                    finally:
+                        db.close()
 
-        st.markdown('</div></div>', unsafe_allow_html=True)
+        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <p style="font-size:0.72rem; color:#304a66; text-align:center; margin-top:8px;">
+        By signing in you agree to our risk disclaimers. This platform is for
+        educational and demo-trading purposes only.
+        </p>
+        """, unsafe_allow_html=True)
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
-def sidebar():
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+def render_sidebar():
+    u = st.session_state.user
     with st.sidebar:
-        st.markdown(f"""
-<div style="padding:24px 16px 16px;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:32px;">
-        <div style="width:32px;height:32px;background:linear-gradient(135deg,#1d4ed8,#7c3aed);
-            border-radius:8px;display:flex;align-items:center;justify-content:center;
-            font-size:14px;font-weight:800;color:#fff;">T</div>
-        <div>
-            <div style="font-size:13px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;">TradeOS</div>
-            <div style="font-size:10px;color:rgba(148,163,184,0.5);letter-spacing:0.5px;">INTELLIGENCE ENGINE</div>
+        st.markdown("""
+        <div style="padding: 8px 0 20px 0;">
+            <div style="font-size:1.05rem; font-weight:700; color:#e2eaf4; letter-spacing:.02em;">
+                ⬡ TIE
+            </div>
+            <div style="font-size:0.72rem; color:#304a66; letter-spacing:.1em; text-transform:uppercase; margin-top:2px;">
+                Trading Intelligence Engine
+            </div>
         </div>
-    </div>
-    <div style="font-size:10px;color:rgba(148,163,184,0.35);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">Navigation</div>
-</div>
-""", unsafe_allow_html=True)
+        <hr style="border-color:rgba(0,212,255,0.1); margin: 0 0 16px 0;">
+        """, unsafe_allow_html=True)
 
-        pages = [("dashboard", "Dashboard"), ("report", "White Paper Report"), ("news", "Market News"), ("settings", "Settings")]
-        for key, label in pages:
-            active = st.session_state.active_page == key
-            bg = "rgba(37,99,235,0.15)" if active else "transparent"
-            border = "rgba(37,99,235,0.4)" if active else "transparent"
-            color  = "#60a5fa" if active else "rgba(148,163,184,0.75)"
-            if st.button(label, key=f"nav_{key}", use_container_width=True):
-                st.session_state.active_page = key
-                st.rerun()
+        # User badge
+        initials = "".join(w[0].upper() for w in u["name"].split()[:2])
+        st.markdown(f"""
+        <div style="
+            display:flex; align-items:center; gap:12px;
+            background: rgba(0,212,255,0.05);
+            border: 1px solid rgba(0,212,255,0.1);
+            border-radius: 12px; padding: 12px 14px;
+            margin-bottom: 20px;
+        ">
+            <div style="
+                width:36px; height:36px; border-radius:50%;
+                background: linear-gradient(135deg,#00d4ff,#7c3aed);
+                display:flex; align-items:center; justify-content:center;
+                font-weight:700; font-size:0.85rem; color:#0c1222; flex-shrink:0;
+            ">{initials}</div>
+            <div>
+                <div style="font-size:0.85rem; font-weight:600; color:#c8d6e8;">{u['name']}</div>
+                <div style="font-size:0.72rem; color:#304a66; margin-top:1px;">{u['strategy']} strategy</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.markdown('<div style="margin:auto;padding:16px;border-top:1px solid rgba(255,255,255,0.06);margin-top:24px;">', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:11px;color:rgba(148,163,184,0.45);">{st.session_state.user_email}</div>', unsafe_allow_html=True)
-        if st.button("Sign out", key="logout", use_container_width=True):
-            for k in ["logged_in","user_id","user_email","active_page"]:
-                st.session_state[k] = False if k=="logged_in" else (None if k!="active_page" else "dashboard")
+        st.markdown('<div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">Navigation</div>', unsafe_allow_html=True)
+        nav = st.radio("", ["Dashboard", "Analysis Report", "News Feed", "Settings"],
+                       key="nav_radio", label_visibility="collapsed")
+        st.session_state.page = nav
+
+        st.markdown("<div style='flex:1'></div>", unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # Risk limits display
+        st.markdown("""
+        <div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:10px;">Risk Limits (Hard-Coded)</div>
+        """, unsafe_allow_html=True)
+        limits = [("Max Position", "5%"), ("Stop-Loss", "2%"), ("Take-Profit", "5%"),
+                  ("Min R:R", "1:2"), ("Daily Loss", "10%")]
+        for k, v in limits:
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <span style="font-size:0.78rem; color:#4a6a8a;">{k}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:#00d4ff;">{v}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        if st.button("Sign Out", key="signout"):
+            st.session_state.user = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Dashboard Page ────────────────────────────────────────────────────────────
+# ── Dashboard ─────────────────────────────────────────────────────────────────
 def page_dashboard():
     st.markdown("""
-<style>
-.page-header { padding: 32px 32px 0; }
-.page-title { font-size: 26px; font-weight: 700; color: #f1f5f9; letter-spacing: -0.8px; margin-bottom: 4px; }
-.page-sub   { font-size: 13px; color: rgba(148,163,184,0.6); margin-bottom: 24px; }
-.section-card {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 14px;
-    padding: 20px 22px;
-    margin-bottom: 16px;
-}
-.section-label {
-    font-size: 10px; font-weight: 600; letter-spacing: 1.2px;
-    text-transform: uppercase; color: rgba(148,163,184,0.5);
-    margin-bottom: 14px;
-}
-.signal-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown('<div class="page-header">', unsafe_allow_html=True)
-        st.markdown('<div class="page-title">Market Dashboard</div>', unsafe_allow_html=True)
-        st.markdown('<div class="page-sub">Live technical analysis — data refreshes every 60 seconds</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with st.container():
-        pad = st.container()
-        with pad:
-            st.markdown('<div style="padding:0 32px;">', unsafe_allow_html=True)
-
-            # Controls
-            ctrl1, ctrl2, ctrl3, _ = st.columns([1,1,1,3])
-            with ctrl1:
-                symbol = st.selectbox("Pair", ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT"], key="db_symbol")
-            with ctrl2:
-                tf = st.selectbox("Timeframe", ["15m","1h","4h","1d"], index=1, key="db_tf")
-            with ctrl3:
-                strategy = st.selectbox("Strategy", ["Balanced","Aggressive","Conservative"], key="db_strat")
-
-            df = fetch_ohlcv(symbol, tf)
-            df = compute_indicators(df)
-            latest = df.iloc[-1]
-            prev   = df.iloc[-2]
-
-            # Metrics row
-            price_chg = ((latest["close"] - prev["close"]) / prev["close"]) * 100
-            rsi_val   = round(latest["rsi"], 1)
-            macd_val  = round(latest["macd"], 2)
-            vol_chg   = ((latest["volume"] - df["volume"].mean()) / df["volume"].mean()) * 100
-
-            m1,m2,m3,m4,m5 = st.columns(5)
-            with m1: st.metric("Price", f"${latest['close']:,.2f}", f"{price_chg:+.2f}%")
-            with m2: st.metric("RSI (14)", f"{rsi_val}", "Oversold" if rsi_val<30 else "Overbought" if rsi_val>70 else "Neutral")
-            with m3: st.metric("MACD", f"{macd_val}", "Bullish" if macd_val>0 else "Bearish")
-            with m4:
-                ema_sig = "Above EMA20" if latest["close"] > latest["ema20"] else "Below EMA20"
-                st.metric("EMA Signal", ema_sig, f"EMA200: {latest['ema200']:,.0f}")
-            with m5: st.metric("Volume vs Avg", f"{vol_chg:+.1f}%", "Spike" if abs(vol_chg)>50 else "Normal")
-
-            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-            # Chart
-            st.markdown('<div class="section-card">', unsafe_allow_html=True)
-            st.markdown('<div class="section-label">Price Chart — Candlestick + EMAs + Bollinger Bands</div>', unsafe_allow_html=True)
-            st.plotly_chart(build_chart(df, symbol), use_container_width=True, config={"displayModeBar":False})
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # RSI + MACD
-            rc1, rc2 = st.columns(2)
-            with rc1:
-                st.markdown('<div class="section-card">', unsafe_allow_html=True)
-                st.markdown('<div class="section-label">RSI (14)</div>', unsafe_allow_html=True)
-                st.plotly_chart(build_rsi_chart(df), use_container_width=True, config={"displayModeBar":False})
-                st.markdown('</div>', unsafe_allow_html=True)
-            with rc2:
-                st.markdown('<div class="section-card">', unsafe_allow_html=True)
-                st.markdown('<div class="section-label">MACD (12, 26, 9)</div>', unsafe_allow_html=True)
-                st.plotly_chart(build_macd_chart(df), use_container_width=True, config={"displayModeBar":False})
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            # Quick trade signal
-            supp, resist = support_resistance(df)
-            rsi_signal  = "OVERSOLD — potential reversal" if rsi_val<30 else "OVERBOUGHT — watch for pullback" if rsi_val>70 else "NEUTRAL range"
-            macd_signal = "BULLISH crossover" if latest["macd"] > latest["signal"] else "BEARISH crossover"
-            ema_signal  = "BULLISH — price above EMA stack" if latest["close"] > latest["ema50"] > latest["ema200"] else "BEARISH — price below EMA stack"
-
-            st.markdown('<div class="section-card">', unsafe_allow_html=True)
-            st.markdown('<div class="section-label">Quick Signal Summary</div>', unsafe_allow_html=True)
-            sc1,sc2,sc3 = st.columns(3)
-            with sc1:
-                st.markdown(f'<div style="font-size:11px;color:rgba(148,163,184,0.5);margin-bottom:4px;">RSI</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:13px;font-weight:600;color:#f1f5f9;">{rsi_signal}</div>', unsafe_allow_html=True)
-            with sc2:
-                st.markdown(f'<div style="font-size:11px;color:rgba(148,163,184,0.5);margin-bottom:4px;">MACD</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:13px;font-weight:600;color:#f1f5f9;">{macd_signal}</div>', unsafe_allow_html=True)
-            with sc3:
-                st.markdown(f'<div style="font-size:11px;color:rgba(148,163,184,0.5);margin-bottom:4px;">EMA Stack</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:13px;font-weight:600;color:#f1f5f9;">{ema_signal}</div>', unsafe_allow_html=True)
-            st.markdown('<hr style="border-color:rgba(255,255,255,0.05);margin:14px 0;">', unsafe_allow_html=True)
-
-            bull_signals = sum([rsi_val < 50, macd_val > 0, latest["close"] > latest["ema20"]])
-            thesis = "BULLISH" if bull_signals >= 2 else "BEARISH"
-            thesis_color = "#10b981" if thesis == "BULLISH" else "#ef4444"
-            thesis_bg    = "rgba(16,185,129,0.1)" if thesis == "BULLISH" else "rgba(239,68,68,0.1)"
-            thesis_border= "rgba(16,185,129,0.3)" if thesis == "BULLISH" else "rgba(239,68,68,0.3)"
-            st.markdown(f'''
-<div style="display:inline-block;background:{thesis_bg};border:1px solid {thesis_border};
-    border-radius:8px;padding:8px 20px;font-size:13px;font-weight:700;color:{thesis_color};
-    letter-spacing:0.5px;">
-    Trade Thesis: {thesis} — {bull_signals}/3 signals confirm
-</div>''', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# ── White Paper Report Page ───────────────────────────────────────────────────
-def page_report():
-    st.markdown("""
-<style>
-.wp-page { padding: 32px 48px; max-width: 1000px; margin: 0 auto; }
-.wp-header { margin-bottom: 40px; }
-.wp-doc-title {
-    font-size: 32px; font-weight: 800; color: #f1f5f9;
-    letter-spacing: -1px; margin-bottom: 8px;
-}
-.wp-doc-meta {
-    font-size: 12px; color: rgba(148,163,184,0.5);
-    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.3px;
-}
-.wp-divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 32px 0; }
-.wp-section-num {
-    font-size: 10px; font-weight: 700; color: #3b82f6;
-    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px;
-}
-.wp-section-title {
-    font-size: 18px; font-weight: 700; color: #f1f5f9;
-    letter-spacing: -0.3px; margin-bottom: 20px;
-}
-.wp-body {
-    font-size: 14px; color: rgba(203,213,225,0.85);
-    line-height: 1.8; margin-bottom: 20px;
-}
-.wp-news-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.wp-news-table th {
-    text-align: left; padding: 10px 14px;
-    font-size: 10px; font-weight: 600; letter-spacing: 1px;
-    color: rgba(148,163,184,0.5); text-transform: uppercase;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-}
-.wp-news-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    color: rgba(203,213,225,0.8);
-    vertical-align: top;
-}
-.wp-indicator-row {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 10px;
-}
-.wp-ind-name { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-.wp-ind-value { font-size: 22px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; margin: 4px 0; }
-.wp-ind-interp { font-size: 12px; color: rgba(148,163,184,0.65); }
-.wp-level-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-.wp-level-label { font-size: 12px; font-weight: 600; }
-.wp-level-value { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #f1f5f9; }
-.wp-level-dist  { font-size: 11px; color: rgba(148,163,184,0.5); }
-.wp-thesis-box {
-    background: rgba(37,99,235,0.06);
-    border: 1px solid rgba(37,99,235,0.2);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 16px;
-}
-.wp-verdict {
-    font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 12px;
-}
-.wp-evidence-item {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
-    font-size: 13px; color: rgba(203,213,225,0.8);
-}
-.wp-tag {
-    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2);
-    border-radius: 4px; padding: 1px 7px;
-    font-size: 10px; font-weight: 700; color: #60a5fa; flex-shrink: 0;
-    font-family: 'JetBrains Mono', monospace;
-}
-</style>
-""", unsafe_allow_html=True)
-
-    col_c, col_r = st.columns([1,1])
-    with col_c:
-        symbol = st.selectbox("Asset", ["BTC/USDT","ETH/USDT","SOL/USDT","BNB/USDT","XRP/USDT"], key="rp_symbol")
-    with col_r:
-        tf = st.selectbox("Timeframe", ["1h","4h","1d"], key="rp_tf")
-
-    if st.button("Generate White Paper Report", key="gen_report"):
-        with st.spinner("Running institutional-grade analysis..."):
-            df       = fetch_ohlcv(symbol, tf)
-            df       = compute_indicators(df)
-            news     = fetch_news(symbol.split("/")[0])
-            latest   = df.iloc[-1]
-            supp, resist = support_resistance(df)
-            rsi_val  = round(latest["rsi"], 1)
-            macd_val = round(latest["macd"], 4)
-            price    = round(latest["close"], 2)
-            bb_width = round(((latest["bb_up"] - latest["bb_lo"]) / latest["bb_mid"]) * 100, 2)
-            vol_vs   = round(((latest["volume"] - df["volume"].mean()) / df["volume"].mean()) * 100, 1)
-
-            # Thesis computation
-            bull = sum([rsi_val<50, macd_val>0, latest["close"]>latest["ema20"], latest["close"]>latest["ema50"]])
-            verdict     = "BULLISH" if bull >= 3 else "BEARISH" if bull <= 1 else "NEUTRAL"
-            v_color     = "#10b981" if verdict=="BULLISH" else "#ef4444" if verdict=="BEARISH" else "#f59e0b"
-            news_scores = [a["score"] for a in news]
-            avg_sent    = round(sum(news_scores)/len(news_scores), 2) if news_scores else 0
-            ts_str      = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-
-            st.markdown('<div class="wp-page">', unsafe_allow_html=True)
-
-            # Document header
-            st.markdown(f"""
-<div class="wp-header">
-    <div style="display:inline-block;background:rgba(37,99,235,0.1);border:1px solid rgba(37,99,235,0.2);
-        border-radius:6px;padding:4px 14px;font-size:10px;font-weight:700;color:#60a5fa;
-        letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;">
-        White Paper — Institutional Research Document
+    <div style="margin-bottom:24px;">
+        <div style="font-size:0.7rem; letter-spacing:.14em; color:#00d4ff; text-transform:uppercase; font-weight:600;">Market Overview</div>
+        <h2 style="font-size:1.6rem; font-weight:700; color:#e2eaf4; margin:4px 0 0 0;">Live Dashboard</h2>
     </div>
-    <div class="wp-doc-title">{symbol} — Market Intelligence Report</div>
-    <div class="wp-doc-meta">
-        Generated: {ts_str} &nbsp;|&nbsp; Timeframe: {tf} &nbsp;|&nbsp;
-        Entry Price: ${price:,.4f} &nbsp;|&nbsp; Signals: {bull}/4 Bullish
-    </div>
-</div>
-<hr class="wp-divider">
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-            # 01 Executive Summary
-            st.markdown('<div class="wp-section-num">Section 01</div>', unsafe_allow_html=True)
-            st.markdown('<div class="wp-section-title">Executive Summary</div>', unsafe_allow_html=True)
-            exec_text = (
-                f"This report presents a comprehensive multi-layered analysis of {symbol} as of {ts_str}. "
-                f"Current price is **${price:,.4f}**, operating in a {'bullish' if verdict=='BULLISH' else 'bearish' if verdict=='BEARISH' else 'neutral'} regime. "
-                f"The technical overlay shows RSI at {rsi_val} ({'oversold' if rsi_val<30 else 'overbought' if rsi_val>70 else 'neutral territory'}), "
-                f"MACD at {macd_val} ({'positive — momentum favors buyers' if macd_val>0 else 'negative — momentum favors sellers'}), "
-                f"and price {'above' if latest['close']>latest['ema50'] else 'below'} the 50-period EMA. "
-                f"News sentiment aggregated from {len(news)} articles scores an average of {avg_sent:+.1f}/5.0 "
-                f"({'positive' if avg_sent>0 else 'negative' if avg_sent<0 else 'neutral'}). "
-                f"Bollinger Band width at {bb_width}% indicates {'elevated' if bb_width>5 else 'compressed'} volatility. "
-                f"The combined TA+FA verdict is **{verdict}**."
-            )
-            st.markdown(f'<div class="wp-body">{exec_text}</div>', unsafe_allow_html=True)
-            st.markdown('<hr class="wp-divider">', unsafe_allow_html=True)
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        symbol = st.selectbox("Symbol", SYMBOLS, key="dash_sym", label_visibility="collapsed")
+    with c2:
+        tf = st.selectbox("Timeframe", ["15m","1h","4h","1d"], index=1, key="dash_tf", label_visibility="collapsed")
 
-            # 02 Market Pulse — News
-            st.markdown('<div class="wp-section-num">Section 02</div>', unsafe_allow_html=True)
-            st.markdown('<div class="wp-section-title">Market Pulse — News Sentiment Analysis</div>', unsafe_allow_html=True)
-            if news:
-                table_rows = ""
-                for a in news[:10]:
-                    sc = a["score"]
-                    sc_color = sentiment_color(sc)
-                    sc_label = f"+{sc}" if sc>0 else str(sc)
-                    summary_trunc = a["summary"][:100]+"..." if len(a["summary"])>100 else a["summary"]
-                    table_rows += f"""
-<tr>
-  <td><div style="font-weight:500;color:#e2e8f0;margin-bottom:4px;">{a['title']}</div>
-      <div style="font-size:11px;color:rgba(148,163,184,0.55);">{summary_trunc}</div></td>
-  <td style="white-space:nowrap;font-size:10px;color:rgba(148,163,184,0.5);padding-right:20px;">{a['source']}</td>
-  <td><span style="background:rgba(0,0,0,0.3);border:1px solid {sc_color}40;border-radius:6px;
-      padding:3px 10px;font-size:12px;font-weight:700;color:{sc_color};font-family:'JetBrains Mono',monospace;">
-      {sc_label}</span></td>
-</tr>"""
-                st.markdown(f"""
-<table class="wp-news-table">
-<thead><tr><th>Headline</th><th>Source</th><th>Impact Score</th></tr></thead>
-<tbody>{table_rows}</tbody>
-</table>""", unsafe_allow_html=True)
-            else:
-                st.info("News data unavailable.")
-            st.markdown('<hr class="wp-divider">', unsafe_allow_html=True)
+    df = fetch_ohlcv(symbol, tf, 200)
+    df = calc_indicators(df)
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+    sig, score, reasons = get_signal(df)
 
-            # 03 Technical Blueprint
-            st.markdown('<div class="wp-section-num">Section 03</div>', unsafe_allow_html=True)
-            st.markdown('<div class="wp-section-title">Technical Blueprint — Indicator Analysis</div>', unsafe_allow_html=True)
+    # Metrics row
+    chg    = (last["close"] - prev["close"]) / prev["close"] * 100
+    chg_clr= "#10b981" if chg >= 0 else "#ef4444"
+    chg_sym= "+" if chg >= 0 else ""
+    sig_clr = "#10b981" if "BUY" in sig else "#ef4444" if "SELL" in sig else "#00d4ff"
 
-            indicators = [
-                ("RSI (14)", f"{rsi_val}", "Oversold — reversal zone" if rsi_val<30 else "Overbought — pullback risk" if rsi_val>70 else "Neutral — no extreme signal"),
-                ("MACD", f"{macd_val:+.4f}", f"{'Above' if macd_val>0 else 'Below'} zero line — momentum {'bullish' if macd_val>0 else 'bearish'}"),
-                ("EMA 20", f"${latest['ema20']:,.2f}", f"Price {'above' if price>latest['ema20'] else 'below'} — short-term trend {'up' if price>latest['ema20'] else 'down'}"),
-                ("EMA 50", f"${latest['ema50']:,.2f}", f"Price {'above' if price>latest['ema50'] else 'below'} — medium-term trend {'up' if price>latest['ema50'] else 'down'}"),
-                ("EMA 200", f"${latest['ema200']:,.2f}", f"Price {'above' if price>latest['ema200'] else 'below'} — long-term trend {'up' if price>latest['ema200'] else 'down'}"),
-                ("BB Width", f"{bb_width}%", f"{'Elevated — breakout likely' if bb_width>5 else 'Compressed — consolidation phase, watch for squeeze breakout'}"),
-                ("Volume", f"{vol_vs:+.1f}% vs avg", f"{'Above-average volume confirms price action' if vol_vs>20 else 'Below-average volume — weak conviction' if vol_vs<-20 else 'Volume near average — no extreme signal'}"),
-            ]
-
-            ind_cols = st.columns(4)
-            for i, (name, value, interp) in enumerate(indicators):
-                with ind_cols[i % 4]:
-                    st.markdown(f"""
-<div class="wp-indicator-row">
-    <div class="wp-ind-name">{name}</div>
-    <div class="wp-ind-value">{value}</div>
-    <div class="wp-ind-interp">{interp}</div>
-</div>""", unsafe_allow_html=True)
-            st.markdown('<hr class="wp-divider">', unsafe_allow_html=True)
-
-            # 04 Visual Blueprint — Levels
-            st.markdown('<div class="wp-section-num">Section 04</div>', unsafe_allow_html=True)
-            st.markdown('<div class="wp-section-title">Visual Blueprint — Key Price Levels</div>', unsafe_allow_html=True)
-
-            vb1, vb2 = st.columns(2)
-            with vb1:
-                st.markdown('<div style="font-size:11px;font-weight:600;color:rgba(148,163,184,0.5);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">Resistance Zones</div>', unsafe_allow_html=True)
-                for level in resist:
-                    dist = ((level - price) / price) * 100
-                    st.markdown(f"""
-<div class="wp-level-row">
-    <span class="wp-level-label" style="color:#ef4444;">R {level:,.0f}</span>
-    <span class="wp-level-value">${level:,.2f}</span>
-    <span class="wp-level-dist">{dist:+.2f}%</span>
-</div>""", unsafe_allow_html=True)
-                # Entry zone
-                st.markdown(f"""
-<div class="wp-level-row" style="margin-top:8px;">
-    <span class="wp-level-label" style="color:#3b82f6;">Entry Zone</span>
-    <span class="wp-level-value">${price:,.2f}</span>
-    <span class="wp-level-dist">Current</span>
-</div>""", unsafe_allow_html=True)
-
-            with vb2:
-                st.markdown('<div style="font-size:11px;font-weight:600;color:rgba(148,163,184,0.5);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">Support Zones</div>', unsafe_allow_html=True)
-                sl_level  = round(price * 0.98, 2)
-                tp_level  = round(price * 1.05, 2)
-                for level in supp:
-                    dist = ((level - price) / price) * 100
-                    st.markdown(f"""
-<div class="wp-level-row">
-    <span class="wp-level-label" style="color:#10b981;">S {level:,.0f}</span>
-    <span class="wp-level-value">${level:,.2f}</span>
-    <span class="wp-level-dist">{dist:+.2f}%</span>
-</div>""", unsafe_allow_html=True)
-                st.markdown(f"""
-<div class="wp-level-row" style="margin-top:8px;">
-    <span class="wp-level-label" style="color:#ef4444;">Stop-Loss (2%)</span>
-    <span class="wp-level-value">${sl_level:,.2f}</span>
-    <span class="wp-level-dist">-2.00%</span>
-</div>
-<div class="wp-level-row">
-    <span class="wp-level-label" style="color:#10b981;">Take-Profit (5%)</span>
-    <span class="wp-level-value">${tp_level:,.2f}</span>
-    <span class="wp-level-dist">+5.00%</span>
-</div>""", unsafe_allow_html=True)
-            st.markdown('<hr class="wp-divider">', unsafe_allow_html=True)
-
-            # 05 Actionable Thesis
-            st.markdown('<div class="wp-section-num">Section 05</div>', unsafe_allow_html=True)
-            st.markdown('<div class="wp-section-title">Actionable Thesis — Trade Recommendation</div>', unsafe_allow_html=True)
-
-            val_ok, issues, order = validate_trade("BUY" if verdict=="BULLISH" else "SELL", price, sl_level, tp_level, 3.0)
-
+    m1, m2, m3, m4, m5 = st.columns(5)
+    tiles = [
+        ("PRICE", f"${last['close']:,.2f}", f"{chg_sym}{chg:.2f}%", chg_clr),
+        ("RSI 14", f"{last['rsi']:.1f}", "Oversold <30 · Overbought >70", "#5a7a9a"),
+        ("MACD", f"{last['macd']:.2f}", f"Signal {last['signal']:.2f}", "#5a7a9a"),
+        ("VOLUME", f"{last['volume']:,.0f}", "vs 20-period MA", "#5a7a9a"),
+        ("SIGNAL", sig, f"Score {score:+d}", sig_clr),
+    ]
+    for col, (lbl, val, sub, clr) in zip([m1,m2,m3,m4,m5], tiles):
+        with col:
             st.markdown(f"""
-<div class="wp-thesis-box">
-    <div class="wp-verdict" style="color:{v_color};">{verdict}</div>
-    <div style="font-size:13px;color:rgba(203,213,225,0.75);line-height:1.7;">
-        Based on the convergence of {bull}/4 bullish technical signals and a news sentiment of {avg_sent:+.1f},
-        the weight of evidence points {'in favor of' if verdict!='NEUTRAL' else 'toward a wait-and-see approach on'} {symbol}.
-        {'Momentum, trend, and volume confirm directional bias.' if verdict!='NEUTRAL' else 'Conflicting signals suggest reduced position sizing or sitting out until clarity emerges.'}
-    </div>
-</div>""", unsafe_allow_html=True)
-
-            evidence = [
-                ("RSI",   f"RSI at {rsi_val} — {'oversold territory, historically favorable for mean-reversion longs' if rsi_val<30 else 'overbought, risk of short-term pullback' if rsi_val>70 else 'mid-range, no directional extreme'}"),
-                ("MACD",  f"MACD {'+' if macd_val>0 else ''}{macd_val:.4f} — momentum {'accelerating to the upside' if macd_val>0 else 'decelerating, selling pressure dominant'}"),
-                ("EMA",   f"Price at ${price:,.2f} sits {'above' if price>latest['ema20'] else 'below'} EMA20 (${latest['ema20']:,.2f}) — short-term trend {'confirmed up' if price>latest['ema20'] else 'broken down'}"),
-                ("BB",    f"Bollinger Band width {bb_width}% — {'volatility elevated, breakout may be in progress' if bb_width>5 else 'band squeeze in progress, watch for explosive expansion'}"),
-                ("NEWS",  f"Aggregated news sentiment: {avg_sent:+.1f} across {len(news)} articles — {'macro tailwinds supportive' if avg_sent>1 else 'macro headwinds present' if avg_sent<-1 else 'macro neutral'}"),
-                ("RISK",  f"Validated risk params — Entry: ${price:,.2f} | SL: ${sl_level:,.2f} (-2%) | TP: ${tp_level:,.2f} (+5%) | R:R 1:2.5 | Size: 3% of portfolio"),
-            ]
-            for tag, text in evidence:
-                st.markdown(f"""
-<div class="wp-evidence-item">
-    <span class="wp-tag">{tag}</span>
-    <span>{text}</span>
-</div>""", unsafe_allow_html=True)
-
-            st.markdown(f"""
-<div style="margin-top:20px;padding:12px 16px;background:rgba(255,255,255,0.02);
-    border:1px solid rgba(255,255,255,0.06);border-radius:8px;
-    font-size:11px;color:rgba(148,163,184,0.45);line-height:1.6;">
-    Disclaimer: This report is generated by an automated engine and is not financial advice.
-    All trades must pass the mandatory risk validation layer before execution.
-    Past performance of indicators does not guarantee future results.
-    Risk limit validation: {'PASSED' if val_ok else 'FAILED — ' + ', '.join(issues)}
-</div>""", unsafe_allow_html=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# ── News Page ─────────────────────────────────────────────────────────────────
-def page_news():
-    st.markdown('<div style="padding:32px 32px 0;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:26px;font-weight:700;color:#f1f5f9;letter-spacing:-0.8px;margin-bottom:4px;">Market News</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:13px;color:rgba(148,163,184,0.6);margin-bottom:24px;">Real-time news feeds with automated sentiment scoring</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    q_col, _ = st.columns([2,4])
-    with q_col:
-        query = st.text_input("Search topic", value="crypto bitcoin trading", key="news_query")
-
-    with st.spinner("Fetching news feeds..."):
-        articles = fetch_news(query)
-
-    if not articles:
-        st.warning("No articles found. Try a different search term.")
-        return
-
-    avg = round(sum(a["score"] for a in articles)/len(articles), 2) if articles else 0
-    av_color = sentiment_color(avg)
-
-    m1, m2, m3 = st.columns(3)
-    with m1: st.metric("Articles Fetched", len(articles))
-    with m2: st.metric("Avg Sentiment", f"{avg:+.2f}/5.0")
-    with m3: st.metric("Overall Tone", "Positive" if avg>0 else "Negative" if avg<0 else "Neutral")
+            <div class="metric-tile">
+                <span style="font-size:0.65rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase;">{lbl}</span>
+                <span style="display:block; font-family:'JetBrains Mono',monospace; font-size:1.25rem; font-weight:700; color:{clr}; margin:6px 0 4px 0;">{val}</span>
+                <span style="font-size:0.72rem; color:#4a6a8a;">{sub}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    st.plotly_chart(build_chart(df, symbol), use_container_width=True)
+    st.plotly_chart(build_volume_chart(df),  use_container_width=True)
 
-    for a in articles:
-        sc = a["score"]
-        sc_color = sentiment_color(sc)
-        sc_label = f"+{sc}" if sc>0 else str(sc)
-        st.markdown(f"""
-<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);
-    border-radius:12px;padding:18px 22px;margin-bottom:10px;
-    border-left:3px solid {sc_color};">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
-        <div style="flex:1;">
-            <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:6px;">{a['title']}</div>
-            <div style="font-size:12px;color:rgba(148,163,184,0.6);">{a['summary'][:150]}{'...' if len(a['summary'])>150 else ''}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:18px;font-weight:800;color:{sc_color};font-family:'JetBrains Mono',monospace;">{sc_label}</div>
-            <div style="font-size:10px;color:rgba(148,163,184,0.4);margin-top:2px;">Impact Score</div>
+    # Signal reasoning
+    st.markdown(f"""
+    <div class="tic-card" style="border-left: 3px solid {sig_clr};">
+        <div style="font-size:0.68rem; letter-spacing:.12em; color:{sig_clr}; text-transform:uppercase; font-weight:600; margin-bottom:8px;">AI Signal Summary — {sig}</div>
+        {"".join(f'<div style="font-size:0.85rem; color:#8aafc8; margin-bottom:5px; display:flex; gap:10px;"><span style="color:{sig_clr}; font-weight:600;">→</span>{r}</div>' for r in reasons)}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # S/R levels
+    st.markdown(f"""
+    <div class="tic-card">
+        <div class="section-header" style="margin-bottom:12px;">Support / Resistance Levels</div>
+        <div style="display:flex; gap:32px;">
+            <div>
+                <span style="font-size:0.72rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em;">Support</span>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1.1rem; color:#10b981; font-weight:600; margin-top:4px;">${df.attrs['support']:,.2f}</div>
+            </div>
+            <div>
+                <span style="font-size:0.72rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em;">Resistance</span>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1.1rem; color:#ef4444; font-weight:600; margin-top:4px;">${df.attrs['resistance']:,.2f}</div>
+            </div>
+            <div>
+                <span style="font-size:0.72rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em;">BB Upper</span>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1.1rem; color:#00d4ff; font-weight:600; margin-top:4px;">${last['bb_up']:,.2f}</div>
+            </div>
+            <div>
+                <span style="font-size:0.72rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em;">BB Lower</span>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1.1rem; color:#7c3aed; font-weight:600; margin-top:4px;">${last['bb_low']:,.2f}</div>
+            </div>
         </div>
     </div>
-    <div style="margin-top:10px;font-size:10px;color:rgba(148,163,184,0.35);letter-spacing:0.3px;">{a['source']}</div>
-</div>""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# ── Settings Page ─────────────────────────────────────────────────────────────
+# ── White Paper Report ────────────────────────────────────────────────────────
+def page_report():
+    st.markdown("""
+    <div style="margin-bottom:24px;">
+        <div style="font-size:0.7rem; letter-spacing:.14em; color:#7c3aed; text-transform:uppercase; font-weight:600;">Institutional Document</div>
+        <h2 style="font-size:1.6rem; font-weight:700; color:#e2eaf4; margin:4px 0 0 0;">White Paper Report</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        symbol = st.selectbox("Asset Symbol", SYMBOLS, key="rep_sym")
+    with c2:
+        tf = st.selectbox("Timeframe", ["1h","4h","1d"], key="rep_tf")
+    with c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        gen = st.button("Generate Report", use_container_width=True, key="gen_report")
+
+    if not gen:
+        st.markdown("""
+        <div style="text-align:center; padding: 60px 20px; color:#304a66;">
+            <div style="font-size:2rem; margin-bottom:12px; color:rgba(124,58,237,0.4);">⬡</div>
+            <div style="font-size:0.88rem;">Select a symbol and click <strong style="color:#7c3aed;">Generate Report</strong> to produce the institutional analysis.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    with st.spinner("Fetching market data and building report..."):
+        df      = fetch_ohlcv(symbol, tf, 200)
+        df      = calc_indicators(df)
+        news    = fetch_news(symbol.split("/")[0])
+        last    = df.iloc[-1]
+        sig, score, reasons = get_signal(df)
+        chg = (last["close"] - df.iloc[-2]["close"]) / df.iloc[-2]["close"] * 100
+        avg_news_score = sum(a["score"] for a in news) / len(news) if news else 0
+        overall = "BULLISH" if (score >= 1 and avg_news_score >= 0) else \
+                  "BEARISH" if (score <= -1 and avg_news_score <= 0) else "NEUTRAL"
+        overall_clr = "#10b981" if overall=="BULLISH" else "#ef4444" if overall=="BEARISH" else "#00d4ff"
+        rpt_date = datetime.datetime.utcnow().strftime("%B %d, %Y — %H:%M UTC")
+
+    # Report header
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(0,212,255,0.06) 100%);
+        border: 1px solid rgba(124,58,237,0.2);
+        border-radius: 16px;
+        padding: 28px 32px;
+        margin-bottom: 24px;
+    ">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <div>
+                <div style="font-size:0.65rem; letter-spacing:.16em; color:#7c3aed; text-transform:uppercase; font-weight:700;">TRADING INTELLIGENCE ENGINE — INSTITUTIONAL REPORT</div>
+                <div style="font-size:1.8rem; font-weight:700; color:#e2eaf4; margin:6px 0 4px 0;">{symbol} Market Analysis</div>
+                <div style="font-size:0.8rem; color:#4a6a8a;">{rpt_date} · Timeframe: {tf}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.7rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px;">Overall Verdict</div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1.5rem; font-weight:700; color:{overall_clr};">{overall}</div>
+                <div style="font-size:0.75rem; color:#4a6a8a; margin-top:2px;">TA Score: {score:+d} · Sentiment: {avg_news_score:+.1f}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 01 Executive Summary ─────────────────────────────────────────────────
+    exec_body = (
+        f"{symbol.split('/')[0]} is currently trading at "
+        f"<span style='color:#00d4ff; font-family:JetBrains Mono,monospace;'>${last['close']:,.2f}</span>, "
+        f"representing a <span style='color:{'#10b981' if chg>=0 else '#ef4444'};'>{chg:+.2f}%</span> move in this session. "
+        f"The composite technical score is <strong style='color:#e2eaf4;'>{score:+d}</strong> and the news sentiment index reads "
+        f"<strong style='color:#e2eaf4;'>{avg_news_score:+.2f}</strong>, yielding a combined verdict of "
+        f"<strong style='color:{overall_clr};'>{overall}</strong>."
+    )
+    st.markdown(f"""
+    <div class="report-section">
+        <div class="report-num">SECTION 01</div>
+        <div class="report-title">Executive Summary</div>
+        <hr style="border-color:rgba(124,58,237,0.15); margin:12px 0;">
+        <p style="font-size:0.9rem; color:#8aafc8; line-height:1.8; margin:0;">{exec_body}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 02 Market Pulse ──────────────────────────────────────────────────────
+    news_rows = ""
+    for a in news[:12]:
+        sc    = a["score"]
+        sc_clr= "#10b981" if sc > 0 else "#ef4444" if sc < 0 else "#00d4ff"
+        badge = "badge-bull" if sc > 0 else "badge-bear" if sc < 0 else "badge-neut"
+        summ  = a["summary"][:120].strip() + ("…" if len(a["summary"]) > 120 else "")
+        news_rows += f"""
+        <tr>
+            <td style="padding:10px 8px; border-bottom:1px solid rgba(0,212,255,0.06); font-size:0.82rem; color:#c8d6e8; max-width:300px;">{a['title'][:80]}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid rgba(0,212,255,0.06); font-size:0.78rem; color:#5a7a9a;">{summ}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid rgba(0,212,255,0.06); text-align:center;">
+                <span style="font-family:'JetBrains Mono',monospace; font-weight:700; color:{sc_clr};">{sc:+d}</span></td>
+            <td style="padding:10px 8px; border-bottom:1px solid rgba(0,212,255,0.06); font-size:0.72rem; color:#4a6a8a;">{a['source']}</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <div class="report-section">
+        <div class="report-num">SECTION 02</div>
+        <div class="report-title">Market Pulse — News Analysis</div>
+        <hr style="border-color:rgba(124,58,237,0.15); margin:12px 0;">
+        <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; padding:0 8px 10px 8px;">Headline</th>
+                    <th style="text-align:left; font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; padding:0 8px 10px 8px;">Summary</th>
+                    <th style="text-align:center; font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; padding:0 8px 10px 8px;">Impact</th>
+                    <th style="text-align:left; font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; padding:0 8px 10px 8px;">Source</th>
+                </tr>
+            </thead>
+            <tbody>{news_rows}</tbody>
+        </table>
+        </div>
+        <div style="margin-top:14px; font-size:0.78rem; color:#4a6a8a;">
+            Average News Sentiment: <span style="color:{'#10b981' if avg_news_score>=0 else '#ef4444'}; font-family:'JetBrains Mono',monospace; font-weight:600;">{avg_news_score:+.2f}</span>
+            &nbsp;·&nbsp; Score range: −5 (very bearish) to +5 (very bullish)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 03 Technical Blueprint ───────────────────────────────────────────────
+    rsi_interp = "Oversold — potential reversal zone" if last['rsi']<35 else "Overbought — potential pullback zone" if last['rsi']>65 else "Neutral territory"
+    macd_interp= "Bullish crossover — momentum building" if last['macd']>last['signal'] else "Bearish divergence — momentum weakening"
+    bb_pos     = "Below lower band — mean-reversion setup" if last['close']<last['bb_low'] else "Above upper band — overextended" if last['close']>last['bb_up'] else "Inside bands — trend continuation mode"
+    ema_interp = "Bullish stack (Price > EMA20 > EMA50)" if last['close']>last['ema20']>last['ema50'] else "Bearish stack (Price < EMA20 < EMA50)" if last['close']<last['ema20']<last['ema50'] else "Mixed — no clear trend"
+    vol_interp = "Spike detected — institutional participation likely" if last['volume']>last['vol_ma']*1.3 else "Below average — low conviction"
+
+    indicators = [
+        ("RSI (14)",             f"{last['rsi']:.2f}",           rsi_interp,  "#00d4ff"),
+        ("MACD",                 f"{last['macd']:.4f}",          macd_interp, "#7c3aed"),
+        ("MACD Signal",          f"{last['signal']:.4f}",        "9-period EMA of MACD line", "#5a7a9a"),
+        ("Bollinger Position",   f"${last['close']:,.2f}",        bb_pos,      "#00d4ff"),
+        ("EMA Stack",            f"20/50/200",                   ema_interp,  "#f59e0b"),
+        ("Volume vs MA20",       f"{last['volume']/last['vol_ma']:.2f}x", vol_interp, "#10b981"),
+    ]
+    ind_html = ""
+    for name, val, interp, clr in indicators:
+        ind_html += f"""
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; padding:12px 0; border-bottom:1px solid rgba(0,212,255,0.06); gap:16px;">
+            <div style="flex:1.2;">
+                <div style="font-size:0.82rem; font-weight:600; color:#c8d6e8;">{name}</div>
+                <div style="font-size:0.75rem; color:#4a6a8a; margin-top:3px;">{interp}</div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.95rem; font-weight:700; color:{clr}; white-space:nowrap;">{val}</div>
+        </div>"""
+
+    st.markdown(f"""
+    <div class="report-section">
+        <div class="report-num">SECTION 03</div>
+        <div class="report-title">Technical Blueprint</div>
+        <hr style="border-color:rgba(124,58,237,0.15); margin:12px 0;">
+        {ind_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 04 Visual Blueprint ──────────────────────────────────────────────────
+    entry_zone_lo = last['close'] * 0.998
+    entry_zone_hi = last['close'] * 1.002
+    sl_price      = last['close'] * 0.98
+    tp_price      = last['close'] * 1.05
+    dist_sup  = (last['close'] - df.attrs['support'])    / last['close'] * 100
+    dist_res  = (df.attrs['resistance'] - last['close']) / last['close'] * 100
+
+    levels = [
+        ("Resistance", f"${df.attrs['resistance']:,.2f}", f"+{dist_res:.2f}% from price", "#ef4444"),
+        ("BB Upper",   f"${last['bb_up']:,.2f}",          "2σ above 20-SMA",              "#f59e0b"),
+        ("EMA 200",    f"${last['ema200']:,.2f}",          "Long-term trend reference",    "#f59e0b"),
+        ("EMA 50",     f"${last['ema50']:,.2f}",           "Medium-term trend",            "#7c3aed"),
+        ("EMA 20",     f"${last['ema20']:,.2f}",           "Short-term trend / dynamic S/R","#00d4ff"),
+        ("Entry Zone", f"${entry_zone_lo:,.2f} – ${entry_zone_hi:,.2f}", "±0.2% around current price","#c8d6e8"),
+        ("BB Lower",   f"${last['bb_low']:,.2f}",          "2σ below 20-SMA",              "#00d4ff"),
+        ("Stop-Loss",  f"${sl_price:,.2f}",                "−2.0% from entry (hard limit)", "#ef4444"),
+        ("Support",    f"${df.attrs['support']:,.2f}",     f"−{dist_sup:.2f}% from price", "#10b981"),
+        ("Take-Profit",f"${tp_price:,.2f}",                "+5.0% from entry (min target)", "#10b981"),
+    ]
+    lvl_html = ""
+    for name, val, desc, clr in levels:
+        lvl_html += f"""
+        <div style="display:flex; align-items:center; gap:14px; padding:9px 0; border-bottom:1px solid rgba(0,212,255,0.06);">
+            <div style="width:10px; height:10px; border-radius:2px; background:{clr}; flex-shrink:0; opacity:0.8;"></div>
+            <div style="flex:1; font-size:0.82rem; color:#8aafc8;">{name}</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.85rem; font-weight:600; color:{clr}; min-width:130px; text-align:right;">{val}</div>
+            <div style="font-size:0.75rem; color:#4a6a8a; min-width:200px; text-align:right;">{desc}</div>
+        </div>"""
+
+    st.markdown(f"""
+    <div class="report-section">
+        <div class="report-num">SECTION 04</div>
+        <div class="report-title">Visual Blueprint — Price Level Map</div>
+        <hr style="border-color:rgba(124,58,237,0.15); margin:12px 0;">
+        <p style="font-size:0.8rem; color:#4a6a8a; margin:0 0 14px 0;">Levels ordered top-to-bottom by price. Apply these coordinates to your charting software.</p>
+        {lvl_html}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── 05 Actionable Thesis ─────────────────────────────────────────────────
+    action_word = "enter a LONG position" if overall=="BULLISH" else "enter a SHORT position" if overall=="BEARISH" else "remain FLAT (no trade)"
+    evidence_html = "".join(f"""
+    <div style="display:flex; align-items:flex-start; gap:12px; margin-bottom:10px;">
+        <div style="
+            background:rgba(124,58,237,0.12); border:1px solid rgba(124,58,237,0.25);
+            border-radius:6px; padding:2px 8px;
+            font-size:0.65rem; font-weight:700; color:#7c3aed;
+            letter-spacing:.08em; white-space:nowrap; margin-top:2px;
+        ">{src}</div>
+        <div style="font-size:0.85rem; color:#8aafc8;">{txt}</div>
+    </div>""" for src, txt in [
+        ("RSI",  f"At {last['rsi']:.1f} — {rsi_interp.lower()}"),
+        ("MACD", macd_interp),
+        ("EMA",  ema_interp),
+        ("BB",   bb_pos),
+        ("VOL",  vol_interp),
+        ("NEWS", f"Aggregate sentiment {avg_news_score:+.2f} across {len(news)} articles"),
+    ])
+
+    valid, issues, order = validate_trade(
+        "BUY" if overall=="BULLISH" else "SELL",
+        last["close"], sl_price, tp_price, 3.0
+    )
+    val_color = "#10b981" if valid else "#ef4444"
+    val_text  = f"APPROVED — R:R {order.get('risk_reward','N/A')}" if valid else "REJECTED — " + "; ".join(issues)
+
+    st.markdown(f"""
+    <div class="report-section">
+        <div class="report-num">SECTION 05</div>
+        <div class="report-title">Actionable Thesis</div>
+        <hr style="border-color:rgba(124,58,237,0.15); margin:12px 0;">
+        <div style="margin-bottom:18px;">
+            <span style="font-size:0.72rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em;">Recommendation</span>
+            <div style="font-size:1.2rem; font-weight:700; color:{overall_clr}; margin-top:4px;">
+                {overall} — {action_word.upper()}
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#4a6a8a; text-transform:uppercase; letter-spacing:.08em; margin-bottom:12px;">Supporting Evidence</div>
+        {evidence_html}
+        <hr style="border-color:rgba(0,212,255,0.08); margin:18px 0;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <div style="font-size:0.78rem; color:#4a6a8a;">Risk Validation Layer:</div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:0.82rem; font-weight:700; color:{val_color};">{val_text}</div>
+        </div>
+        <p style="font-size:0.72rem; color:#2a3a4a; margin:14px 0 0 0; line-height:1.6;">
+        Disclaimer: This report is generated algorithmically for educational and demo-trading purposes only.
+        It does not constitute financial advice. All trades must be validated by the risk layer before execution.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.plotly_chart(build_chart(df, symbol), use_container_width=True)
+
+# ── News Feed ─────────────────────────────────────────────────────────────────
+def page_news():
+    st.markdown("""
+    <div style="margin-bottom:24px;">
+        <div style="font-size:0.7rem; letter-spacing:.14em; color:#00d4ff; text-transform:uppercase; font-weight:600;">Real-Time Intelligence</div>
+        <h2 style="font-size:1.6rem; font-weight:700; color:#e2eaf4; margin:4px 0 0 0;">News Feed</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    query = st.text_input("Filter by keyword", placeholder="bitcoin, ethereum, SEC…", key="news_q")
+    news  = fetch_news(query or "crypto", 20)
+
+    for a in news:
+        sc     = a["score"]
+        sc_clr = "#10b981" if sc > 0 else "#ef4444" if sc < 0 else "#00d4ff"
+        lbl    = "BULLISH" if sc > 0 else "BEARISH" if sc < 0 else "NEUTRAL"
+        st.markdown(f"""
+        <div style="
+            background: #0f1e35;
+            border: 1px solid rgba(0,212,255,0.08);
+            border-left: 3px solid {sc_clr};
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 10px;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1;">
+                    <div style="font-size:0.88rem; font-weight:600; color:#c8d6e8; margin-bottom:6px;">{a['title']}</div>
+                    <div style="font-size:0.78rem; color:#4a6a8a; line-height:1.6;">{a['summary'][:180]}</div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:1.1rem; font-weight:700; color:{sc_clr};">{sc:+d}</div>
+                    <div style="font-size:0.65rem; color:{sc_clr}; letter-spacing:.08em; text-transform:uppercase;">{lbl}</div>
+                    <div style="font-size:0.7rem; color:#2a3a4a; margin-top:4px;">{a['source']}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# ── Settings ──────────────────────────────────────────────────────────────────
 def page_settings():
-    st.markdown('<div style="padding:32px 32px 0;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:26px;font-weight:700;color:#f1f5f9;letter-spacing:-0.8px;margin-bottom:4px;">Settings</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:13px;color:rgba(148,163,184,0.6);margin-bottom:24px;">Exchange API keys are encrypted with AES-256 before storage</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="margin-bottom:24px;">
+        <div style="font-size:0.7rem; letter-spacing:.14em; color:#00d4ff; text-transform:uppercase; font-weight:600;">Account Configuration</div>
+        <h2 style="font-size:1.6rem; font-weight:700; color:#e2eaf4; margin:4px 0 0 0;">Settings</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown('<div style="padding:0 32px;">', unsafe_allow_html=True)
-    tab_api, tab_risk, tab_acct = st.tabs(["API Keys", "Risk Limits", "Account"])
+    u = st.session_state.user
+    c1, c2 = st.columns([1.2, 1])
 
-    with tab_api:
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-        db  = SessionLocal()
-        row = db.query(ApiKey).filter(ApiKey.user_id == st.session_state.user_id).first()
-        db.close()
-        current_exchange = row.exchange if row else "binance"
+    with c1:
+        st.markdown('<div class="section-header" style="margin-bottom:14px;">Exchange API Keys (AES-256 Encrypted)</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="
+            background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.15);
+            border-radius: 10px; padding: 12px 16px; margin-bottom:16px; font-size:0.8rem; color:#9a6a6a;
+        ">
+            API keys are encrypted with AES-256 Fernet before storage. They are never saved in plaintext.
+            Use exchange sub-accounts with trade-only permissions. Enable 2FA on your exchange.
+        </div>
+        """, unsafe_allow_html=True)
 
-        with st.form("api_form"):
-            exchange = st.selectbox("Exchange", ["binance","bybit","okx","kucoin","coinbase"], index=["binance","bybit","okx","kucoin","coinbase"].index(current_exchange) if current_exchange in ["binance","bybit","okx","kucoin","coinbase"] else 0)
-            api_key  = st.text_input("API Key", type="password", placeholder="Your exchange API key")
-            api_sec  = st.text_input("API Secret", type="password", placeholder="Your exchange API secret")
-            st.markdown('<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:12px 16px;font-size:12px;color:rgba(245,158,11,0.8);margin:12px 0;">Keys are encrypted with AES-256 before being written to the database. They are never stored in plaintext.</div>', unsafe_allow_html=True)
-            save = st.form_submit_button("Save API Keys")
-            if save:
-                if not api_key or not api_sec:
-                    st.error("Both API Key and Secret are required.")
-                else:
-                    db = SessionLocal()
-                    existing = db.query(ApiKey).filter(ApiKey.user_id == st.session_state.user_id).first()
-                    if existing:
-                        existing.exchange  = exchange
-                        existing.enc_key   = encrypt(api_key)
-                        existing.enc_secret= encrypt(api_sec)
-                        existing.updated_at= datetime.datetime.utcnow()
-                    else:
-                        db.add(ApiKey(user_id=st.session_state.user_id, exchange=exchange, enc_key=encrypt(api_key), enc_secret=encrypt(api_sec)))
-                    db.commit(); db.close()
-                    st.success("API keys saved securely.")
+        with st.form("api_form", clear_on_submit=True):
+            exchange   = st.selectbox("Exchange", ["binance","bybit","okx","kraken","coinbase"], key="api_exc")
+            api_key_in = st.text_input("API Key", placeholder="Paste your API key here", type="password", key="api_k")
+            api_sec_in = st.text_input("API Secret", placeholder="Paste your API secret here", type="password", key="api_s")
+            save_api   = st.form_submit_button("Save Encrypted Keys", use_container_width=True)
 
-    with tab_risk:
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        if save_api:
+            if not api_key_in or not api_sec_in:
+                st.error("Both API key and secret are required.")
+            else:
+                db = SessionLocal()
+                try:
+                    new_key = ApiKey(
+                        user_id=u["id"], exchange=exchange,
+                        api_key_enc=encrypt(api_key_in),
+                        api_secret_enc=encrypt(api_sec_in)
+                    )
+                    db.add(new_key); db.commit()
+                    st.success(f"{exchange.capitalize()} keys saved with AES-256 encryption.")
+                except Exception as e:
+                    st.error(f"Save error: {e}")
+                finally:
+                    db.close()
+
+    with c2:
+        st.markdown('<div class="section-header" style="margin-bottom:14px;">Hard-Coded Risk Limits</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="font-size:0.78rem; color:#4a6a8a; margin-bottom:14px;">
+        These limits are enforced at the validation layer level and cannot be overridden by AI responses.
+        </div>
+        """, unsafe_allow_html=True)
         limits = [
-            ("Max Position Size", f"{MAX_POSITION_PCT}%", "Maximum capital per single trade"),
-            ("Stop-Loss Limit",   f"{MAX_SL_PCT}%",       "Maximum allowed SL from entry price"),
-            ("Min Take-Profit",   f"{MIN_TP_PCT}%",       "Minimum required TP from entry price"),
-            ("Min Risk/Reward",   f"1:{MIN_RR}",          "Minimum R:R before trade is allowed"),
-            ("Daily Loss Limit",  f"{MAX_DAILY_LOSS}%",   "Global shutdown triggers above this loss"),
+            ("Max Position Size", "5.0%", "of total balance per trade"),
+            ("Stop-Loss Limit",   "2.0%", "max distance from entry"),
+            ("Min Take-Profit",   "5.0%", "min distance from entry"),
+            ("Min R:R Ratio",     "1 : 2", "reward must be ≥ 2× risk"),
+            ("Daily Loss Limit",  "10.0%", "triggers Global Shutdown"),
         ]
         for name, val, desc in limits:
             st.markdown(f"""
-<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);
-    border-radius:10px;padding:16px 20px;margin-bottom:8px;
-    display:flex;justify-content:space-between;align-items:center;">
-    <div>
-        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">{name}</div>
-        <div style="font-size:11px;color:rgba(148,163,184,0.5);margin-top:2px;">{desc}</div>
-    </div>
-    <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:#3b82f6;">{val}</div>
-</div>""", unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;color:rgba(148,163,184,0.35);margin-top:8px;">These limits are hard-coded and cannot be overridden by the AI agent.</div>', unsafe_allow_html=True)
-
-    with tab_acct:
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-        st.markdown(f"""
-<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:20px 24px;">
-    <div style="font-size:11px;color:rgba(148,163,184,0.5);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Logged in as</div>
-    <div style="font-size:16px;font-weight:600;color:#f1f5f9;">{st.session_state.user_email}</div>
-</div>""", unsafe_allow_html=True)
+            <div style="
+                background: #0f1e35;
+                border: 1px solid rgba(0,212,255,0.08);
+                border-radius: 10px; padding: 14px 16px; margin-bottom: 8px;
+                display: flex; justify-content: space-between; align-items: center;
+            ">
+                <div>
+                    <div style="font-size:0.82rem; font-weight:600; color:#c8d6e8;">{name}</div>
+                    <div style="font-size:0.72rem; color:#4a6a8a; margin-top:2px;">{desc}</div>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:#00d4ff;">{val}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        if st.button("Change Password", key="chng_pw"):
-            st.info("Password change: enter new password below.")
-        with st.form("pw_form"):
-            np1 = st.text_input("New password", type="password", key="np1")
-            np2 = st.text_input("Confirm new password", type="password", key="np2")
-            if st.form_submit_button("Update Password"):
-                if not np1 or not np2:
-                    st.error("Fill both fields.")
-                elif np1 != np2:
-                    st.error("Passwords do not match.")
-                elif len(np1) < 8:
-                    st.error("Minimum 8 characters.")
-                else:
-                    db = SessionLocal()
-                    u  = db.query(User).filter(User.id == st.session_state.user_id).first()
-                    if u:
-                        u.password_hash = hash_pw(np1)
-                        db.commit()
-                        st.success("Password updated.")
-                    db.close()
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header" style="margin-bottom:14px;">Trading Strategy</div>', unsafe_allow_html=True)
+        strategy = st.selectbox("Strategy Mode", ["Balanced","Conservative","Aggressive"],
+                                index=["Balanced","Conservative","Aggressive"].index(u.get("strategy","Balanced")),
+                                key="strat_sel")
+        if st.button("Update Strategy", use_container_width=True, key="upd_strat"):
+            db = SessionLocal()
+            try:
+                row = db.query(User).filter(User.id == u["id"]).first()
+                if row:
+                    row.strategy = strategy; db.commit()
+                    st.session_state.user["strategy"] = strategy
+                    st.success(f"Strategy updated to {strategy}.")
+            except Exception as e:
+                st.error(f"Update error: {e}")
+            finally:
+                db.close()
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    inject_css()
-    init_state()
-
-    if not st.session_state.logged_in:
+    if not st.session_state.user:
         page_auth()
         return
 
-    sidebar()
+    render_sidebar()
 
-    page = st.session_state.active_page
-    if page == "dashboard": page_dashboard()
-    elif page == "report":  page_report()
-    elif page == "news":    page_news()
-    elif page == "settings":page_settings()
+    page = st.session_state.page
+    if   page == "Dashboard":       page_dashboard()
+    elif page == "Analysis Report": page_report()
+    elif page == "News Feed":       page_news()
+    elif page == "Settings":        page_settings()
 
 if __name__ == "__main__":
     main()
