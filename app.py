@@ -663,50 +663,52 @@ def page_auth():
         with tab_up:
             st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
             with st.form("form_signup", clear_on_submit=False):
-                full_name = st.text_input("Full Name",         placeholder="Your full name",       key="su_name")
-                su_email  = st.text_input("Email Address",     placeholder="you@example.com",      key="su_email")
-                su_pw     = st.text_input("Password",          placeholder="Min 8 characters",     type="password", key="su_pw")
-                su_pw2    = st.text_input("Confirm Password",  placeholder="Repeat your password", type="password", key="su_pw2")
-                strategy  = st.selectbox("Trading Strategy", ["Balanced","Conservative","Aggressive"], key="su_strat")
+                full_name = st.text_input("Full Name",        placeholder="Your full name",       key="su_name")
+                su_email  = st.text_input("Email Address",    placeholder="you@example.com",      key="su_email")
+                su_pw     = st.text_input("Password",         placeholder="Min 8 characters",     type="password", key="su_pw")
+                su_pw2    = st.text_input("Confirm Password", placeholder="Repeat password",      type="password", key="su_pw2")
+                strategy  = st.selectbox("Trading Strategy",  ["Balanced","Conservative","Aggressive"], key="su_strat")
                 register  = st.form_submit_button("Create Account", use_container_width=True)
-
-            if register:
-                errs = []
-                if not full_name:             errs.append("Full name is required.")
-                if not su_email or "@" not in su_email: errs.append("Valid email is required.")
-                if len(su_pw) < 8:            errs.append("Password must be at least 8 characters.")
-                if su_pw != su_pw2:           errs.append("Passwords do not match.")
-
-                if errs:
-                    for e in errs:
-                        st.error(e)
-                else:
-                    db = SessionLocal()
-                    try:
-                        exists = db.query(User).filter(User.email == su_email.lower().strip()).first()
-                        if exists:
-                            st.error("An account with this email already exists.")
-                        else:
-                            new_user = User(
-                                email=su_email.lower().strip(),
-                                password_hash=hash_pw(su_pw),
-                                full_name=full_name.strip(),
-                                strategy=strategy
-                            )
-                            db.add(new_user)
-                            db.commit()
-                            db.refresh(new_user)
-                            st.session_state.user = {
-                                "id": new_user.id, "email": new_user.email,
-                                "name": new_user.full_name,
-                                "strategy": new_user.strategy
-                            }
-                            st.success("Account created! Welcome aboard.")
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Registration error: {e}")
-                    finally:
-                        db.close()
+                if register:
+                    errs = []
+                    if not full_name.strip():
+                        errs.append("Full name is required.")
+                    if not su_email or "@" not in su_email:
+                        errs.append("Valid email is required.")
+                    if len(su_pw) < 8:
+                        errs.append("Password must be at least 8 characters.")
+                    if su_pw != su_pw2:
+                        errs.append("Passwords do not match.")
+                    if errs:
+                        for e in errs:
+                            st.error(e)
+                    else:
+                        db = SessionLocal()
+                        try:
+                            exists = db.query(User).filter(User.email == su_email.lower().strip()).first()
+                            if exists:
+                                st.error("An account with this email already exists. Please sign in.")
+                            else:
+                                new_user = User(
+                                    email=su_email.lower().strip(),
+                                    password_hash=hash_pw(su_pw),
+                                    full_name=full_name.strip(),
+                                    strategy=strategy
+                                )
+                                db.add(new_user)
+                                db.commit()
+                                db.refresh(new_user)
+                                st.session_state.user = {
+                                    "id": new_user.id, "email": new_user.email,
+                                    "name": new_user.full_name,
+                                    "strategy": new_user.strategy
+                                }
+                                st.success("Account created! Redirecting...")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Registration error: {e}")
+                        finally:
+                            db.close()
 
         st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
         st.markdown("""
