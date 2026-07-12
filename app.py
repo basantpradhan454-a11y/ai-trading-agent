@@ -9,7 +9,7 @@ import ccxt, pandas as pd, numpy as np
 import plotly.graph_objects as go
 import feedparser, re, uuid, os, datetime, json, hashlib
 from cryptography.fernet import Fernet
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -71,12 +71,24 @@ class TradeLog(Base):
 Base.metadata.create_all(bind=engine)
 
 # ── Security ──────────────────────────────────────────────────────────────────
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 RAW_KEY = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
 FERNET   = Fernet(RAW_KEY.encode() if isinstance(RAW_KEY, str) else RAW_KEY)
 
-def hash_pw(p):  return pwd_ctx.hash(p)
-def verify_pw(p, h): return pwd_ctx.verify(p, h)
+import hashlib as _hl
+
+def _pre(p: str) -> bytes:
+    """SHA-256 pre-hash → hex string so bcrypt never sees >72 bytes."""
+    return _hl.sha256(p.encode("utf-8")).hexdigest().encode("utf-8")
+
+def hash_pw(p: str) -> str:
+    return _bcrypt.hashpw(_pre(p), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+def verify_pw(p: str, h: str) -> bool:
+    try:
+        return _bcrypt.checkpw(_pre(p), h.encode("utf-8"))
+    except Exception:
+        return False
 def encrypt(v):  return FERNET.encrypt(v.encode()).decode()
 def decrypt(v):  return FERNET.decrypt(v.encode()).decode()
 
