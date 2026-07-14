@@ -14,6 +14,20 @@ import bcrypt as _bcrypt
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+# ── New Feature Imports ────────────────────────────────────────────────────────
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from views.backtesting_view import render_backtesting_page
+    from views.portfolio_view import render_portfolio_page
+    from views.academy_view import render_academy_page
+    from views.vision_view import render_vision_page
+    from views.chat_view import render_chat_page
+    FEATURES_LOADED = True
+except ImportError as _e:
+    FEATURES_LOADED = False
+    _FEATURE_ERROR = str(_e)
+
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Trading Intelligence Engine",
@@ -771,7 +785,8 @@ def render_sidebar():
         """, unsafe_allow_html=True)
 
         st.markdown('<div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">Navigation</div>', unsafe_allow_html=True)
-        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report", "News Feed", "Settings"],
+        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report", "News Feed",
+                              "🔬 Backtesting", "💼 Portfolio", "🎓 Academy", "👁️ Vision AI", "🤖 AI Chat", "Settings"],
                        key="nav_radio", label_visibility="collapsed")
         st.session_state.page = nav
 
@@ -1581,11 +1596,26 @@ def main():
     render_sidebar()
 
     page = st.session_state.page
-    if   page == "Dashboard":       page_dashboard()
+    if   page == "Dashboard":          page_dashboard()
     elif page == "Stock Dashboard":    page_stock_dashboard()
-    elif page == "Analysis Report": page_report()
-    elif page == "News Feed":       page_news()
-    elif page == "Settings":        page_settings()
+    elif page == "Analysis Report":    page_report()
+    elif page == "News Feed":          page_news()
+    elif page == "Settings":           page_settings()
+    elif page == "🔬 Backtesting":
+        if FEATURES_LOADED: render_backtesting_page()
+        else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
+    elif page == "💼 Portfolio":
+        if FEATURES_LOADED: render_portfolio_page()
+        else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
+    elif page == "🎓 Academy":
+        if FEATURES_LOADED: render_academy_page()
+        else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
+    elif page == "👁️ Vision AI":
+        if FEATURES_LOADED: render_vision_page()
+        else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
+    elif page == "🤖 AI Chat":
+        if FEATURES_LOADED: render_chat_page()
+        else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
 
 if __name__ == "__main__":
     main()
