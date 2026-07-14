@@ -5,6 +5,7 @@ Futuristic dark fintech UI — clean Streamlit architecture
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import ccxt, pandas as pd, numpy as np
 import plotly.graph_objects as go
 import feedparser, re, uuid, os, datetime, json, hashlib
@@ -770,7 +771,7 @@ def render_sidebar():
         """, unsafe_allow_html=True)
 
         st.markdown('<div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">Navigation</div>', unsafe_allow_html=True)
-        nav = st.radio("", ["Dashboard", "Analysis Report", "News Feed", "Settings"],
+        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report", "News Feed", "Settings"],
                        key="nav_radio", label_visibility="collapsed")
         st.session_state.page = nav
 
@@ -1266,6 +1267,288 @@ def page_settings():
                 db.close()
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
+# ── Stock Dashboard Page ───────────────────────────────────────────────────────
+STOCK_LIST = [
+    {"ticker": "RELIANCE.NS", "name": "Reliance Industries", "logo": "🛢️"},
+    {"ticker": "TCS.NS",      "name": "Tata Consultancy",    "logo": "💻"},
+    {"ticker": "HDFCBANK.NS", "name": "HDFC Bank",           "logo": "🏦"},
+    {"ticker": "INFY.NS",     "name": "Infosys",             "logo": "🔷"},
+    {"ticker": "ICICIBANK.NS","name": "ICICI Bank",          "logo": "🏧"},
+    {"ticker": "SBIN.NS",     "name": "State Bank of India", "logo": "🏛️"},
+    {"ticker": "BAJFINANCE.NS","name":"Bajaj Finance",       "logo": "💰"},
+    {"ticker": "HINDUNILVR.NS","name":"Hindustan Unilever",  "logo": "🧴"},
+    {"ticker": "WIPRO.NS",    "name": "Wipro",               "logo": "🌐"},
+    {"ticker": "TATAMOTORS.NS","name":"Tata Motors",         "logo": "🚗"},
+    {"ticker": "AAPL",        "name": "Apple Inc.",          "logo": "🍎"},
+    {"ticker": "MSFT",        "name": "Microsoft",           "logo": "🪟"},
+    {"ticker": "GOOGL",       "name": "Alphabet (Google)",   "logo": "🔍"},
+    {"ticker": "TSLA",        "name": "Tesla",               "logo": "⚡"},
+    {"ticker": "NVDA",        "name": "NVIDIA",              "logo": "🎮"},
+]
+
+def detect_candlestick_patterns(df):
+    """Detect common candlestick patterns."""
+    patterns = []
+    if len(df) < 3:
+        return patterns
+    df = df.copy()
+    df['body']       = abs(df['Close'] - df['Open'])
+    df['upper_wick'] = df['High'] - df[['Open','Close']].max(axis=1)
+    df['lower_wick'] = df[['Open','Close']].min(axis=1) - df['Low']
+    df['range']      = df['High'] - df['Low']
+
+    last  = df.iloc[-1]
+    prev  = df.iloc[-2]
+    prev2 = df.iloc[-3]
+
+    # Doji
+    if last['range'] > 0 and last['body'] / last['range'] < 0.1:
+        patterns.append({"name": "Doji", "signal": "⚠️ Neutral", "desc": "Indecision — possible reversal"})
+
+    # Hammer
+    if (last['lower_wick'] > 2 * last['body'] and
+        last['upper_wick'] < last['body'] and
+        last['Close'] < prev['Close']):
+        patterns.append({"name": "Hammer", "signal": "🟢 Bullish", "desc": "Potential bottom reversal"})
+
+    # Shooting Star
+    if (last['upper_wick'] > 2 * last['body'] and
+        last['lower_wick'] < last['body'] and
+        last['Close'] > prev['Close']):
+        patterns.append({"name": "Shooting Star", "signal": "🔴 Bearish", "desc": "Potential top reversal"})
+
+    # Bullish Engulfing
+    if (prev['Close'] < prev['Open'] and
+        last['Close'] > last['Open'] and
+        last['Open'] < prev['Close'] and
+        last['Close'] > prev['Open']):
+        patterns.append({"name": "Bullish Engulfing", "signal": "🟢 Bullish", "desc": "Strong reversal signal"})
+
+    # Bearish Engulfing
+    if (prev['Close'] > prev['Open'] and
+        last['Close'] < last['Open'] and
+        last['Open'] > prev['Close'] and
+        last['Close'] < prev['Open']):
+        patterns.append({"name": "Bearish Engulfing", "signal": "🔴 Bearish", "desc": "Strong downtrend signal"})
+
+    # Morning Star
+    if (prev2['Close'] < prev2['Open'] and
+        prev['body'] < prev2['body'] * 0.3 and
+        last['Close'] > last['Open'] and
+        last['Close'] > (prev2['Open'] + prev2['Close']) / 2):
+        patterns.append({"name": "Morning Star", "signal": "🟢 Bullish", "desc": "3-candle bullish reversal"})
+
+    # Evening Star
+    if (prev2['Close'] > prev2['Open'] and
+        prev['body'] < prev2['body'] * 0.3 and
+        last['Close'] < last['Open'] and
+        last['Close'] < (prev2['Open'] + prev2['Close']) / 2):
+        patterns.append({"name": "Evening Star", "signal": "🔴 Bearish", "desc": "3-candle bearish reversal"})
+
+    return patterns
+
+
+def page_stock_dashboard():
+    import yfinance as yf
+    import streamlit.components.v1 as components
+
+    st.markdown("""
+    <style>
+    .stock-card{background:linear-gradient(135deg,#0f1e35,#1a2f4e);border:1px solid #1e3a5f;
+        border-radius:12px;padding:14px 18px;margin-bottom:10px;cursor:pointer;
+        transition:all 0.2s;display:flex;align-items:center;justify-content:space-between;}
+    .stock-card:hover{border-color:#00d4ff;box-shadow:0 0 12px rgba(0,212,255,0.2);}
+    .s-name{font-size:15px;font-weight:600;color:#e0e8f0;}
+    .s-ticker{font-size:11px;color:#6b8aad;margin-top:2px;}
+    .s-price{font-size:17px;font-weight:700;}
+    .s-chg{font-size:12px;margin-top:2px;text-align:right;}
+    .pattern-card{background:#0f1e35;border:1px solid #1e3a5f;border-radius:8px;
+        padding:10px 14px;margin:6px 0;}
+    .tv-container{border-radius:12px;overflow:hidden;border:1px solid #1e3a5f;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("## 📊 Stock Dashboard")
+
+    # Search bar
+    search = st.text_input("🔍 Search stocks...", placeholder="Name ya ticker type karo", key="sd_search")
+    filtered = [s for s in STOCK_LIST if
+                search.lower() in s['name'].lower() or
+                search.lower() in s['ticker'].lower()] if search else STOCK_LIST
+
+    # Init selected stock
+    if 'sd_selected' not in st.session_state:
+        st.session_state.sd_selected = None
+
+    col_list, col_detail = st.columns([1, 2], gap="medium")
+
+    with col_list:
+        st.markdown("### 📋 Stocks")
+        for s in filtered:
+            try:
+                info = yf.Ticker(s['ticker']).fast_info
+                price  = info.last_price or 0
+                prev   = info.previous_close or price
+                chg    = price - prev
+                chg_pct= (chg / prev * 100) if prev else 0
+                color  = "#00d97e" if chg >= 0 else "#ff4d6d"
+                arrow  = "▲" if chg >= 0 else "▼"
+            except:
+                price, chg_pct, color, arrow = 0, 0, "#888", "–"
+
+            btn_label = f"{s['logo']} {s['name']} ({s['ticker']})  {'▲' if chg_pct>=0 else '▼'}{abs(chg_pct):.2f}%"
+            if st.button(btn_label, key=f"sd_btn_{s['ticker']}", use_container_width=True):
+                st.session_state.sd_selected = s['ticker']
+                st.rerun()
+
+    with col_detail:
+        sel = st.session_state.sd_selected
+        if not sel:
+            st.info("👈 Koi stock select karo detail dekhne ke liye")
+        else:
+            stock_info = next((s for s in STOCK_LIST if s['ticker'] == sel), None)
+            st.markdown(f"### {stock_info['logo']} {stock_info['name']} — `{sel}`")
+
+            # Chart type toggle
+            chart_mode = st.radio("Chart Type", ["📈 TradingView", "🕯️ Candlestick", "📉 Line Chart"],
+                                   horizontal=True, key="sd_chart_mode")
+            tf = st.select_slider("Timeframe", ["1d","5d","1mo","3mo","6mo","1y"], value="1mo", key="sd_tf")
+
+            # ── TradingView Widget ─────────────────────────────────────────
+            if chart_mode == "📈 TradingView":
+                tv_symbol = sel.replace(".NS", "").replace(".BSE", "")
+                if ".NS" in sel:
+                    tv_symbol = f"NSE:{tv_symbol}"
+                elif ".BSE" in sel:
+                    tv_symbol = f"BSE:{tv_symbol}"
+                else:
+                    tv_symbol = f"NASDAQ:{tv_symbol}"
+
+                tv_html = f"""
+                <div class="tradingview-widget-container" style="height:420px;">
+                  <div id="tradingview_chart"></div>
+                  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                  <script type="text/javascript">
+                  new TradingView.widget({{
+                    "width": "100%", "height": 420,
+                    "symbol": "{tv_symbol}",
+                    "interval": "D",
+                    "timezone": "Asia/Kolkata",
+                    "theme": "dark",
+                    "style": "1",
+                    "locale": "en",
+                    "toolbar_bg": "#0c1222",
+                    "enable_publishing": false,
+                    "allow_symbol_change": true,
+                    "studies": ["RSI@tv-basicstudies","MACD@tv-basicstudies","BB@tv-basicstudies"],
+                    "container_id": "tradingview_chart"
+                  }});
+                  </script>
+                </div>"""
+                components.html(tv_html, height=430)
+
+            else:
+                # Fetch OHLC data
+                try:
+                    period_map = {"1d":"1d","5d":"5d","1mo":"1mo","3mo":"3mo","6mo":"6mo","1y":"1y"}
+                    interval_map = {"1d":"5m","5d":"15m","1mo":"1d","3mo":"1d","6mo":"1wk","1y":"1wk"}
+                    ticker = yf.Ticker(sel)
+                    df = ticker.history(period=period_map[tf], interval=interval_map[tf])
+                    df.reset_index(inplace=True)
+
+                    if chart_mode == "🕯️ Candlestick":
+                        fig = go.Figure(data=[go.Candlestick(
+                            x=df['Datetime'] if 'Datetime' in df.columns else df['Date'],
+                            open=df['Open'], high=df['High'],
+                            low=df['Low'],   close=df['Close'],
+                            increasing_line_color='#00d97e',
+                            decreasing_line_color='#ff4d6d',
+                            name=sel
+                        )])
+                        fig.update_layout(
+                            paper_bgcolor='#0c1222', plot_bgcolor='#0f1e35',
+                            font_color='#e0e8f0', height=380,
+                            xaxis_rangeslider_visible=False,
+                            margin=dict(l=10,r=10,t=30,b=10),
+                            title=f"{sel} — Candlestick ({tf})"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Pattern Detection
+                        st.markdown("#### 🕯️ Candlestick Pattern Analysis")
+                        patterns = detect_candlestick_patterns(df)
+                        if patterns:
+                            for p in patterns:
+                                st.markdown(f"""<div class='pattern-card'>
+                                    <b style='color:#00d4ff'>{p['name']}</b>
+                                    &nbsp;&nbsp;<span>{p['signal']}</span>
+                                    <br><small style='color:#6b8aad'>{p['desc']}</small>
+                                </div>""", unsafe_allow_html=True)
+                        else:
+                            st.info("Is timeframe mein koi clear pattern nahi mila.")
+
+                    else:  # Line Chart
+                        fig = go.Figure()
+                        close_col = df['Close']
+                        fig.add_trace(go.Scatter(
+                            x=df['Datetime'] if 'Datetime' in df.columns else df['Date'],
+                            y=close_col, mode='lines',
+                            line=dict(color='#00d4ff', width=2),
+                            fill='tozeroy', fillcolor='rgba(0,212,255,0.08)',
+                            name='Price'
+                        ))
+                        fig.update_layout(
+                            paper_bgcolor='#0c1222', plot_bgcolor='#0f1e35',
+                            font_color='#e0e8f0', height=380,
+                            margin=dict(l=10,r=10,t=30,b=10),
+                            title=f"{sel} — Line Chart ({tf})"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Data load nahi hua: {e}")
+
+            # ── Fundamentals ───────────────────────────────────────────────
+            st.markdown("#### 📊 Fundamental Analysis")
+            try:
+                info = yf.Ticker(sel).info
+                fc1, fc2, fc3 = st.columns(3)
+                fc1.metric("Market Cap", f"${info.get('marketCap',0)/1e9:.1f}B" if info.get('marketCap') else "N/A")
+                fc2.metric("P/E Ratio",  f"{info.get('trailingPE','N/A'):.1f}" if isinstance(info.get('trailingPE'),float) else "N/A")
+                fc3.metric("52W High",   f"{info.get('fiftyTwoWeekHigh','N/A')}")
+                fc4, fc5, fc6 = st.columns(3)
+                fc4.metric("52W Low",    f"{info.get('fiftyTwoWeekLow','N/A')}")
+                fc5.metric("Div Yield",  f"{info.get('dividendYield',0)*100:.2f}%" if info.get('dividendYield') else "N/A")
+                fc6.metric("EPS",        f"{info.get('trailingEps','N/A')}")
+            except:
+                st.warning("Fundamental data temporarily unavailable.")
+
+            # ── Technical Indicators ───────────────────────────────────────
+            st.markdown("#### ⚙️ Technical Indicators")
+            try:
+                ticker = yf.Ticker(sel)
+                df_tech = ticker.history(period="3mo", interval="1d")
+                if len(df_tech) >= 14:
+                    # RSI
+                    delta = df_tech['Close'].diff()
+                    gain  = delta.clip(lower=0).rolling(14).mean()
+                    loss  = (-delta.clip(upper=0)).rolling(14).mean()
+                    rs    = gain / loss
+                    rsi   = (100 - 100/(1+rs)).iloc[-1]
+                    # MAs
+                    ma20  = df_tech['Close'].rolling(20).mean().iloc[-1]
+                    ma50  = df_tech['Close'].rolling(50).mean().iloc[-1] if len(df_tech)>=50 else None
+                    cur   = df_tech['Close'].iloc[-1]
+
+                    tc1, tc2, tc3 = st.columns(3)
+                    rsi_color = "🟢" if rsi < 30 else ("🔴" if rsi > 70 else "🟡")
+                    tc1.metric("RSI (14)", f"{rsi:.1f} {rsi_color}")
+                    tc2.metric("MA 20",    f"{ma20:.2f}", f"{'Above' if cur>ma20 else 'Below'} price")
+                    tc3.metric("MA 50",    f"{ma50:.2f}" if ma50 else "N/A",
+                               f"{'Above' if ma50 and cur>ma50 else 'Below'} price" if ma50 else "")
+            except:
+                st.warning("Technical data temporarily unavailable.")
 def main():
     if not st.session_state.user:
         page_auth()
@@ -1275,6 +1558,7 @@ def main():
 
     page = st.session_state.page
     if   page == "Dashboard":       page_dashboard()
+    elif page == "Stock Dashboard":    page_stock_dashboard()
     elif page == "Analysis Report": page_report()
     elif page == "News Feed":       page_news()
     elif page == "Settings":        page_settings()
