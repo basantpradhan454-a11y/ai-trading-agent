@@ -1550,8 +1550,32 @@ def page_stock_dashboard():
             except:
                 st.warning("Technical data temporarily unavailable.")
 def main():
+    # ── Always show Stock Dashboard on front, auth in sidebar/expander ──
     if not st.session_state.user:
-        page_auth()
+        # Show Stock Dashboard as main content
+        st.markdown("""
+        <div style='text-align:center; padding: 10px 0 20px 0;'>
+            <span style='font-size:2.2rem; font-weight:800; 
+                background: linear-gradient(90deg,#00d4ff,#7c3aed);
+                -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>
+                ⬡ Trading Intelligence Engine
+            </span>
+            <p style='color:#8892a4; margin-top:6px; font-size:0.95rem;'>
+                Live Stock Dashboard — Sign in for full features
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_dash, col_auth = st.columns([2, 1], gap="large")
+        with col_dash:
+            page_stock_dashboard()
+        with col_auth:
+            st.markdown("""<div style='background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
+                border-radius:16px; padding:20px;'>""", unsafe_allow_html=True)
+            st.markdown("### 🔐 Sign In for Full Access")
+            st.caption("Unlock AI Trading, Portfolio Analysis & more")
+            page_auth()
+            st.markdown("</div>", unsafe_allow_html=True)
         return
 
     render_sidebar()
