@@ -292,26 +292,15 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     text-transform: uppercase;
 }
 
-/* Sidebar nav radio */
-[data-testid="stSidebar"] .stRadio > div {
-    gap: 4px !important;
-}
-[data-testid="stSidebar"] .stRadio label {
-    background: rgba(0,212,255,0.04);
-    border: 1px solid rgba(0,212,255,0.08);
-    border-radius: 10px;
-    padding: 10px 16px !important;
-    cursor: pointer;
-    font-size: 0.88rem;
-    color: #8aafc8 !important;
-    transition: all .18s;
-    width: 100%;
-    display: block;
-}
-[data-testid="stSidebar"] .stRadio label:hover {
-    border-color: rgba(0,212,255,0.3);
+/* Sidebar nav selectbox */
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background: rgba(0,212,255,0.04) !important;
+    border: 1px solid rgba(0,212,255,0.18) !important;
+    border-radius: 10px !important;
     color: #00d4ff !important;
-    background: rgba(0,212,255,0.08);
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    padding: 10px 14px !important;
 }
 
 /* Selectbox */
@@ -765,11 +754,11 @@ def render_sidebar():
         """, unsafe_allow_html=True)
 
         st.markdown('<div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">Navigation</div>', unsafe_allow_html=True)
-        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report",
-                              "🔬 Backtesting", "🕯️ Pattern Detector", "📡 Advanced Analyzer",
-                              "💼 Portfolio", "🎓 Academy", "👁️ Vision AI", "🤖 AI Chat",
-                              "News Feed", "Settings", "📜 Terms & Policy"],
-                       key="nav_radio", label_visibility="collapsed")
+        nav_options = ["Stock Dashboard", "Dashboard", "Analysis Report",
+                        "🔬 Backtesting", "🕯️ Pattern Detector", "📡 Advanced Analyzer",
+                        "💼 Portfolio", "🎓 Academy", "👁️ Vision AI", "🤖 AI Chat",
+                        "News Feed", "Settings", "📜 Terms & Policy"]
+        nav = st.selectbox("", nav_options, key="nav_select", label_visibility="collapsed")
         st.session_state.page = nav
 
         st.markdown("<div style='flex:1'></div>", unsafe_allow_html=True)
@@ -1161,12 +1150,12 @@ def page_news():
 def page_settings():
     st.markdown("""
     <div style="margin-bottom:24px;">
-        <div style="font-size:0.7rem; letter-spacing:.14em; color:#00d4ff; text-transform:uppercase; font-weight:600;">Account Configuration</div>
+        <div style="font-size:0.7rem; letter-spacing:.14em; color:#00d4ff; text-transform:uppercase; font-weight:600;">Configuration</div>
         <h2 style="font-size:1.6rem; font-weight:700; color:#e2eaf4; margin:4px 0 0 0;">Settings</h2>
     </div>
     """, unsafe_allow_html=True)
 
-    u = st.session_state.user
+    u = st.session_state.get("user", {"id": "guest", "email": "guest", "name": "Guest", "strategy": "Balanced"})
     c1, c2 = st.columns([1.2, 1])
 
     with c1:
@@ -1246,7 +1235,8 @@ def page_settings():
                 row = db.query(User).filter(User.id == u["id"]).first()
                 if row:
                     row.strategy = strategy; db.commit()
-                    st.session_state.user["strategy"] = strategy
+                    if isinstance(st.session_state.get("user"), dict):
+                        st.session_state.user["strategy"] = strategy
                     st.success(f"Strategy updated to {strategy}.")
             except Exception as e:
                 st.error(f"Update error: {e}")
