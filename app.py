@@ -23,6 +23,9 @@ try:
     from views.academy_view import render_academy_page
     from views.vision_view import render_vision_page
     from views.chat_view import render_chat_page
+    from views.terms_view import render_terms_page
+    from modules.advanced_analyzer import render_advanced_analyzer
+    from modules.pattern_detector import render_pattern_detector
     FEATURES_LOADED = True
 except ImportError as _e:
     FEATURES_LOADED = False
@@ -747,72 +750,41 @@ def page_auth():
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 def render_sidebar():
-    u = st.session_state.user
     with st.sidebar:
         st.markdown("""
-        <div style="padding: 8px 0 20px 0;">
-            <div style="font-size:1.05rem; font-weight:700; color:#e2eaf4; letter-spacing:.02em;">
-                ⬡ TIE
-            </div>
-            <div style="font-size:0.72rem; color:#304a66; letter-spacing:.1em; text-transform:uppercase; margin-top:2px;">
-                Trading Intelligence Engine
-            </div>
-        </div>
-        <hr style="border-color:rgba(0,212,255,0.1); margin: 0 0 16px 0;">
-        """, unsafe_allow_html=True)
-
-        # User badge
-        initials = "".join(w[0].upper() for w in u["name"].split()[:2])
-        st.markdown(f"""
-        <div style="
-            display:flex; align-items:center; gap:12px;
-            background: rgba(0,212,255,0.05);
-            border: 1px solid rgba(0,212,255,0.1);
-            border-radius: 12px; padding: 12px 14px;
-            margin-bottom: 20px;
-        ">
-            <div style="
-                width:36px; height:36px; border-radius:50%;
-                background: linear-gradient(135deg,#00d4ff,#7c3aed);
-                display:flex; align-items:center; justify-content:center;
-                font-weight:700; font-size:0.85rem; color:#0c1222; flex-shrink:0;
-            ">{initials}</div>
-            <div>
-                <div style="font-size:0.85rem; font-weight:600; color:#c8d6e8;">{u['name']}</div>
-                <div style="font-size:0.72rem; color:#304a66; margin-top:1px;">{u['strategy']} strategy</div>
-            </div>
+        <div style="padding: 10px 0 20px 0; text-align:center;">
+            <span style="font-size:1.5rem; font-weight:800;
+                background: linear-gradient(90deg,#00d4ff,#7c3aed);
+                -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
+                ⬡ FinsageAI
+            </span>
+            <p style="color:#304a66; font-size:0.7rem; margin-top:4px; letter-spacing:.08em;">
+                TRADING INTELLIGENCE ENGINE v6.0
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
         st.markdown('<div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">Navigation</div>', unsafe_allow_html=True)
-        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report", "News Feed",
-                              "🔬 Backtesting", "💼 Portfolio", "🎓 Academy", "👁️ Vision AI", "🤖 AI Chat", "Settings"],
+        nav = st.radio("", ["Dashboard", "Stock Dashboard", "Analysis Report",
+                              "🔬 Backtesting", "🕯️ Pattern Detector", "📡 Advanced Analyzer",
+                              "💼 Portfolio", "🎓 Academy", "👁️ Vision AI", "🤖 AI Chat",
+                              "News Feed", "Settings", "📜 Terms & Policy"],
                        key="nav_radio", label_visibility="collapsed")
         st.session_state.page = nav
 
         st.markdown("<div style='flex:1'></div>", unsafe_allow_html=True)
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        # Risk limits display
         st.markdown("""
-        <div style="font-size:0.68rem; letter-spacing:.1em; color:#304a66; text-transform:uppercase; margin-bottom:10px;">Risk Limits (Hard-Coded)</div>
+        <div style="text-align:center; padding: 10px 0;">
+            <p style="color:#304a66; font-size:0.68rem; line-height:1.6;">
+                ⚖️ Educational use only<br>
+                Not SEBI investment advice<br>
+                <span style="color:#4a6a8a;">© 2026 FinsageAI</span>
+            </p>
+        </div>
         """, unsafe_allow_html=True)
-        limits = [("Max Position", "5%"), ("Stop-Loss", "2%"), ("Take-Profit", "5%"),
-                  ("Min R:R", "1:2"), ("Daily Loss", "10%")]
-        for k, v in limits:
-            st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                <span style="font-size:0.78rem; color:#4a6a8a;">{k}</span>
-                <span style="font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:#00d4ff;">{v}</span>
-            </div>
-            """, unsafe_allow_html=True)
 
-        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-        if st.button("Sign Out", key="signout"):
-            st.session_state.user = None
-            st.rerun()
-
-# ── Dashboard ─────────────────────────────────────────────────────────────────
 def page_dashboard():
     st.markdown("""
     <div style="margin-bottom:24px;">
@@ -1565,39 +1537,15 @@ def page_stock_dashboard():
             except:
                 st.warning("Technical data temporarily unavailable.")
 def main():
-    # ── Always show Stock Dashboard on front, auth in sidebar/expander ──
-    if not st.session_state.user:
-        # Show Stock Dashboard as main content
-        st.markdown("""
-        <div style='text-align:center; padding: 10px 0 20px 0;'>
-            <span style='font-size:2.2rem; font-weight:800; 
-                background: linear-gradient(90deg,#00d4ff,#7c3aed);
-                -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>
-                ⬡ Trading Intelligence Engine
-            </span>
-            <p style='color:#8892a4; margin-top:6px; font-size:0.95rem;'>
-                Live Stock Dashboard — Sign in for full features
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        col_dash, col_auth = st.columns([2, 1], gap="large")
-        with col_dash:
-            page_stock_dashboard()
-        with col_auth:
-            st.markdown("""<div style='background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2);
-                border-radius:16px; padding:20px;'>""", unsafe_allow_html=True)
-            st.markdown("### 🔐 Sign In for Full Access")
-            st.caption("Unlock AI Trading, Portfolio Analysis & more")
-            page_auth()
-            st.markdown("</div>", unsafe_allow_html=True)
-        return
+    # ── No signup required — direct access to all features ──
+    if "page" not in st.session_state:
+        st.session_state.page = "Stock Dashboard"
 
     render_sidebar()
 
     page = st.session_state.page
-    if   page == "Dashboard":          page_dashboard()
-    elif page == "Stock Dashboard":    page_stock_dashboard()
+    if   page == "Stock Dashboard":    page_stock_dashboard()
+    elif page == "Dashboard":          page_dashboard()
     elif page == "Analysis Report":    page_report()
     elif page == "News Feed":          page_news()
     elif page == "Settings":           page_settings()
@@ -1616,6 +1564,12 @@ def main():
     elif page == "🤖 AI Chat":
         if FEATURES_LOADED: render_chat_page()
         else: st.error(f"Feature module load error: {_FEATURE_ERROR}")
+    elif page == "📡 Advanced Analyzer":
+        render_advanced_analyzer()
+    elif page == "🕯️ Pattern Detector":
+        render_pattern_detector()
+    elif page == "📜 Terms & Policy":
+        render_terms_page()
 
 if __name__ == "__main__":
     main()
