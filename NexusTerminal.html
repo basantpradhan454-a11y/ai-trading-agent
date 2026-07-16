@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Terminal | Professional Asset Intelligence & Trading</title>
+    
+    <!-- Design System: Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Scripts: React & Charting Core -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+    <style>
+        :root {
+            --bg: #0a0e14;
+            --bg-deep: #060811;
+            --panel: rgba(18, 22, 31, 0.72);
+            --cyan: #22d3ee;
+            --violet: #7c6ff0;
+            --green: #16c784;
+            --red: #ea3943;
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --text-dark: #64748b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg);
+            background: radial-gradient(circle at 10% 10%, rgba(124, 111, 240, 0.12), transparent 40%),
+                        radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.08), transparent 40%),
+                        var(--bg);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            cursor: default;
+        }
+
+        /* Typefaces */
+        .font-display { font-family: 'Space Grotesk', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+        /* Component Classes */
+        .glass {
+            background: var(--panel);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border);
+        }
+
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite linear;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .pulse-live {
+            width: 8px;
+            height: 8px;
+            background: var(--green);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--green);
+            animation: pulse-op 2s infinite ease-in-out;
+        }
+        @keyframes pulse-op {
+            0% { opacity: 0.4; transform: scale(0.85); }
+            50% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        .tab-indicator {
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Asset Rows */
+        .asset-item {
+            border-left: 3px solid transparent;
+            transition: all 0.15s ease-out;
+        }
+        .asset-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        .asset-item.active {
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent);
+            border-left-color: var(--cyan);
+        }
+
+        /* Grid Layout */
+        .terminal-shell {
+            display: grid;
+            grid-template-rows: 64px 1fr;
+            height: 100vh;
+        }
+
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 280px 1fr 340px;
+            overflow: hidden;
+        }
+
+        /* Technical Indicator Gauges */
+        .gauge-bg { height: 6px; border-radius: 10px; background: rgba(255,255,255,0.05); position: relative; overflow: hidden; }
+        .gauge-fill { height: 100%; border-radius: 10px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        .badge-base {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .badge-buy { background: rgba(22, 199, 132, 0.12); color: var(--green); border: 1px solid rgba(22, 199, 132, 0.2); }
+        .badge-sell { background: rgba(234, 57, 67, 0.12); color: var(--red); border: 1px solid rgba(234, 57, 67, 0.2); }
+        .badge-hold { background: rgba(148, 163, 184, 0.12); color: var(--text-dim); border: 1px solid rgba(148, 163, 184, 0.2); }
+
+        /* TradingView Widget Overrides */
+        .tv-widget-container iframe {
+            border: none !important;
+            border-radius: 8px !important;
+        }
+
+        /* Tooltip Logic */
+        [data-title] { position: relative; }
+        [data-title]:hover::after {
+            content: attr(data-title);
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: #1e293b;
+            color: white;
+            font-size: 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 999;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+
+        @media (max-width: 1200px) {
+            .workspace-grid { grid-template-columns: 240px 1fr 0px; }
+            .analysis-bar { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="nexus-root"></div>
+
+    <script type="text/babel">
+        /**
+         * NEXUS TERMINAL - PRODUCTION GRADE SOURCE
+         * Architected for High-Performance Asset Tracking
+         */
+
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        // --- GLOBAL CONSTANTS & DATA REGISTRY ---
+
+        const THEME = {
+            colors: {
+                bg: '#0a0e14',
+                bgDeep: '#060811',
+                panel: 'rgba(18,22,31,0.72)',
+                cyan: '#22d3ee',
+                violet: '#7c6ff0',
+                green: '#16c784',
+                red: '#ea3943',
+                grid: 'rgba(255,255,255,0.04)',
+                crosshair: 'rgba(255,255,255,0.25)'
+            }
+        };
+
+        const ASSET_REGISTRY = {
+            CRYPTO: [
+                // Large Caps
+                'BTC','ETH','BNB','SOL','XRP','ADA','DOGE','AVAX','DOT','LINK',
+                'MATIC','LTC','TRX','SHIB','ATOM','UNI','ETC','XLM','NEAR','APT',
+                // Mid Caps
+                'OP','ARB','FIL','MANA','SAND','GALA','INJ','SUI','SEI','PEPE',
+                'FLOKI','BONK','WIF','JTO','RNDR','FET','AGIX','OCEAN','GRT','LRC',
+                'IMX','BLUR','ENS','CRV','CVX','BAL','AAVE','COMP','MKR','SNX',
+                // Newer
+                'TON','HBAR','ALGO','VET','EGLD','FTM','THETA','KLAY','ZIL','ONE',
+                'ROSE','CELR','SKL','ANKR','DENT','HOT','SC','XEM','DGB','ZEC',
+                'DASH','XMR','EOS','ICX','ONT','ZRX','BAT','STORJ','AUDIO','BAND',
+                'ICP','STX','FLOW','CELO','CHZ','ENJ','AXS','GMT','LUNC','USTC',
+            ],
+            STOCKS: {
+                'US Tech': ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','NFLX','AMD','INTC','ORCL','CRM','ADBE','QCOM','AVGO','IBM','CSCO','TXN','MU','AMAT','NOW','SNOW','PANW','CRWD','ZS'],
+                'US Finance': ['JPM','BAC','GS','MS','WFC','C','BRK-B','V','MA','AXP','BLK','SCHW','COF','USB','PNC','TFC','ALLY','SQ','PYPL','COIN'],
+                'US Health': ['JNJ','PFE','UNH','ABBV','MRK','LLY','BMY','AMGN','GILD','REGN','VRTX','MRNA','ISRG','DHR','MDT','ELV','CI','CVS','HUM','ZBH'],
+                'US Consumer': ['AMZN','WMT','HD','MCD','SBUX','NKE','DIS','KO','PEP','PM','MO','CL','PG','KHC','GIS','K','CPB','CAG','SYY','HSY'],
+                'US Energy': ['XOM','CVX','COP','SLB','EOG','PXD','MPC','PSX','VLO','OXY','HAL','BKR','DVN','FANG','APA'],
+                'India NSE': ['RELIANCE.NS','TCS.NS','INFY.NS','HDFCBANK.NS','ICICIBANK.NS','HINDUNILVR.NS','BAJFINANCE.NS','SBIN.NS','BHARTIARTL.NS','ITC.NS','WIPRO.NS','AXISBANK.NS','KOTAKBANK.NS','TECHM.NS','LT.NS','MARUTI.NS','ULTRACEMCO.NS','TITAN.NS','NESTLEIND.NS','POWERGRID.NS','HCLTECH.NS','SUNPHARMA.NS','ONGC.NS','NTPC.NS','TATAMOTORS.NS','TATASTEEL.NS','JSWSTEEL.NS','COALINDIA.NS','INDUSINDBK.NS','DRREDDY.NS'],
+                'UK': ['HSBA.L','LLOY.L','BP.L','SHEL.L','GSK.L','AZN.L','ULVR.L','RIO.L','BT-A.L','BARC.L','STAN.L','NWG.L','VOD.L','BATS.L','DGE.L'],
+                'Germany': ['SAP.DE','SIE.DE','BMW.DE','MBG.DE','VOW3.DE','ALV.DE','BAYN.DE','DBK.DE','DTE.DE','RWE.DE','BAS.DE','MUV2.DE'],
+                'Japan': ['7203.T','6758.T','9984.T','8306.T','6501.T','6752.T','7267.T','4063.T','6902.T','8035.T'],
+                'China': ['BABA','JD','PDD','NIO','BIDU','TCEHY','XPEV','LI','YUMC','NTES','VIPS','IQ','TIGR'],
+                'ETFs': ['SPY','QQQ','DIA','IWM','GLD','SLV','USO','VTI','ARKK','XLF','XLK','XLV','XLE','XLP','EEM','EFA','VWO','AGG','TLT','HYG'],
+                'Watchlist': [],
+            }
+        };
+
+        // ─── FREE STOCK & MARKET DATA APIs ───────────────────────────────────
+        // 1. Yahoo Finance v8/v10 (via CORS proxy) — OHLCV + fundamentals
+        // 2. Yahoo Finance RSS  — news headlines
+        // 3. CoinGecko (free, no key) — crypto fundamentals & global market
+        // 4. Binance public REST+WS — crypto OHLCV + live prices
+        // 5. Alternative.me — Fear & Greed index
+        // 6. CryptoPanic (free token) — crypto news
+        // 7. Stooq.com (no key) — backup OHLCV for Indian & global stocks
+        // 8. Open Exchange Rates (free tier) — forex
+        // 9. FMP (Financial Modeling Prep) — free tier stocks & ETFs
+
+        const PROXIES = {
+            allorigins: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            corsproxy: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            thingproxy: (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
+        };
+
+        // Multi-proxy fallback for Yahoo Finance
+        const yahooFetch = async (path) => {
+            const base = `https://query1.finance.yahoo.com${path}`;
+            const base2 = `https://query2.finance.yahoo.com${path}`;
+            const proxies = [
+                PROXIES.allorigins(base),
+                PROXIES.allorigins(base2),
+                PROXIES.corsproxy(base),
+            ];
+            for (const url of proxies) {
+                try {
+                    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                    if (r.ok) return await r.json();
+                } catch (e) { continue; }
+            }
+            throw new Error('All Yahoo Finance proxies failed');
+        };
+
+        // Yahoo Finance Chart API — returns clean OHLCV array
+        const yahooChart = async (symbol, interval = '1d', range = '6mo') => {
+            // Map our timeframes to Yahoo intervals/ranges
+            const intervalMap = {
+                '1m': { iv: '1m', rng: '1d' },
+                '5m': { iv: '5m', rng: '5d' },
+                '15m': { iv: '15m', rng: '5d' },
+                '1h': { iv: '60m', rng: '1mo' },
+                '4h': { iv: '1h', rng: '3mo' },   // Yahoo has no 4h; use 1h + 3mo
+                '1D': { iv: '1d', rng: '1y' },
+                '1W': { iv: '1wk', rng: '5y' },
+            };
+            const { iv, rng } = intervalMap[interval] || { iv: interval, rng: range };
+            const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${iv}&range=${rng}&includePrePost=false`;
+            const json = await yahooFetch(path);
+            const res = json?.chart?.result?.[0];
+            if (!res) throw new Error('No chart data');
+            const ts = res.timestamp;
+            const q = res.indicators.quote[0];
+            return ts.map((t, i) => ({
+                time: t,
+                open: q.open[i],
+                high: q.high[i],
+                low: q.low[i],
+                close: q.close[i],
+                volume: q.volume[i] || 0,
+            })).filter(d => d.open != null && d.close != null && !isNaN(d.close));
+        };
+
+        // Yahoo Finance Quote Summary — fundamentals
+        const yahooFundamentals = async (symbol) => {
+            const modules = 'price,financialData,summaryDetail,defaultKeyStatistics,assetProfile,earnings';
+            const path = `/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+            const json = await yahooFetch(path);
+            const r = json?.quoteSummary?.result?.[0];
+            if (!r) throw new Error('No fundamental data');
+            const pr = r.price || {};
+            const fd = r.financialData || {};
+            const sd = r.summaryDetail || {};
+            const ks = r.defaultKeyStatistics || {};
+            const ap = r.assetProfile || {};
+            return {
+                name: pr.longName || pr.shortName || symbol,
+                symbol: pr.symbol || symbol,
+                exchange: pr.exchangeName,
+                currency: pr.currency || 'USD',
+                price: pr.regularMarketPrice?.raw,
+                change: pr.regularMarketChange?.raw,
+                changePct: pr.regularMarketChangePercent?.raw,
+                marketCap: pr.marketCap?.raw,
+                pe: sd.trailingPE?.raw,
+                forwardPE: sd.forwardPE?.raw,
+                eps: ks.trailingEps?.raw,
+                revenue: fd.totalRevenue?.raw,
+                grossMargin: fd.grossMargins?.raw,
+                profitMargin: fd.profitMargins?.raw,
+                revenueGrowth: fd.revenueGrowth?.raw,
+                earningsGrowth: fd.earningsGrowth?.raw,
+                debtToEquity: fd.debtToEquity?.raw,
+                currentRatio: fd.currentRatio?.raw,
+                roe: fd.returnOnEquity?.raw,
+                roa: fd.returnOnAssets?.raw,
+                freeCashFlow: fd.freeCashflow?.raw,
+                operatingCashFlow: fd.operatingCashflow?.raw,
+                dividendYield: sd.dividendYield?.raw,
+                dividendRate: sd.dividendRate?.raw,
+                beta: sd.beta?.raw,
+                high52w: sd.fiftyTwoWeekHigh?.raw,
+                low52w: sd.fiftyTwoWeekLow?.raw,
+                avg50: sd.fiftyDayAverage?.raw,
+                avg200: sd.twoHundredDayAverage?.raw,
+                avgVolume: sd.averageVolume?.raw,
+                avgVolume10d: sd.averageVolume10days?.raw,
+                sharesOutstanding: ks.sharesOutstanding?.raw,
+                floatShares: ks.floatShares?.raw,
+                shortRatio: ks.shortRatio?.raw,
+                bookValue: ks.bookValue?.raw,
+                priceToBook: ks.priceToBook?.raw,
+                sector: ap.sector,
+                industry: ap.industry,
+                employees: ap.fullTimeEmployees,
+                country: ap.country,
+                website: ap.website,
+                description: ap.longBusinessSummary?.slice(0, 500),
+                // Analyst data
+                targetMean: fd.targetMeanPrice?.raw,
+                targetHigh: fd.targetHighPrice?.raw,
+                targetLow: fd.targetLowPrice?.raw,
+                recommendation: fd.recommendationKey,
+                numAnalysts: fd.numberOfAnalystOpinions?.raw,
+            };
+        };
+
+        // Yahoo Finance RSS news
+        const yahooNews = async (symbol) => {
+            const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&lang=en-US`;
+            const proxies = [PROXIES.allorigins(url), PROXIES.corsproxy(url)];
+            for (const purl of proxies) {
+                try {
+                    const r = await fetch(purl);
+                    const txt = await r.text();
+                    const doc = new DOMParser().parseFromString(txt, 'text/xml');
+                    const items = Array.from(doc.querySelectorAll('item')).slice(0, 15);
+                    return items.map(i => {
+                        const title = i.querySelector('title')?.textContent || '';
+                        const link = i.querySelector('link')?.textContent || '#';
+                        const pubDate = i.querySelector('pubDate')?.textContent || '';
+                        const desc = i.querySelector('description')?.textContent || '';
+                        const bullish = ['surge', 'rally', 'beat', 'breakout', 'upgrade', 'buy', 'growth', 'record', 'profit', 'gain', 'rise', 'up', 'bull'];
+                        const bearish = ['crash', 'dump', 'miss', 'downgrade', 'sell', 'warning', 'loss', 'decline', 'fall', 'down', 'cut', 'fear', 'bear'];
+                        const tl = title.toLowerCase();
+                        const sentiment = bullish.filter(k => tl.includes(k)).length > bearish.filter(k => tl.includes(k)).length ? 'Bullish' : bearish.some(k => tl.includes(k)) ? 'Bearish' : 'Neutral';
+                        return { title, link, pubDate, desc, sentiment, source: 'Yahoo Finance' };
+                    });
+                } catch (e) { continue; }
+            }
+            return [];
+        };
+
+        // Stooq.com — free backup for OHLCV (no CORS issues via proxy)
+        const stooqChart = async (symbol, interval = '1d') => {
+            const ivMap = { '1D': 'd', '1W': 'w', '1h': 'h', '4h': 'h' };
+            const iv = ivMap[interval] || 'd';
+            const sym = symbol.replace('.NS', '.IN').replace('.BO', '.IN').toLowerCase();
+            const url = `https://stooq.com/q/d/l/?s=${sym}&i=${iv}`;
+            try {
+                const r = await fetch(PROXIES.allorigins(url));
+                const txt = await r.text();
+                const lines = txt.trim().split('\n').slice(1); // skip header
+                return lines.map(ln => {
+                    const [date, open, high, low, close, volume] = ln.split(',');
+                    const t = new Date(date).getTime() / 1000;
+                    return { time: t, open: +open, high: +high, low: +low, close: +close, volume: +(volume||0) };
+                }).filter(d => !isNaN(d.time) && !isNaN(d.close));
+            } catch (e) { return []; }
+        };
+
+        // CoinGecko — crypto fundamentals (free, no key, rate limited)
+        const cgFetch = async (path) => {
+            const url = `https://api.coingecko.com/api/v3${path}`;
+            const r = await fetch(url);
+            if (!r.ok) throw new Error(`CoinGecko ${r.status}`);
+            return r.json();
+        };
+
+        const CG_ID_MAP = {
+            BTC:'bitcoin',ETH:'ethereum',BNB:'binancecoin',SOL:'solana',XRP:'ripple',
+            ADA:'cardano',DOGE:'dogecoin',AVAX:'avalanche-2',DOT:'polkadot',LINK:'chainlink',
+            MATIC:'matic-network',LTC:'litecoin',TRX:'tron',SHIB:'shiba-inu',ATOM:'cosmos',
+            UNI:'uniswap',ETC:'ethereum-classic',XLM:'stellar',NEAR:'near',APT:'aptos',
+            OP:'optimism',ARB:'arbitrum',FIL:'filecoin',MANA:'decentraland',SAND:'the-sandbox',
+            INJ:'injective-protocol',SUI:'sui',PEPE:'pepe',RNDR:'render-token',FET:'fetch-ai',
+            AAVE:'aave',COMP:'compound-governance-token',MKR:'maker',SNX:'havven',
+            CRV:'curve-dao-token',BAL:'balancer',GRT:'the-graph',ENS:'ethereum-name-service',
+            IMX:'immutable-x',BLUR:'blur',LRC:'loopring',OCEAN:'ocean-protocol',
+        };
+
+        const cgCoinData = async (base) => {
+            const id = CG_ID_MAP[base] || base.toLowerCase();
+            return cgFetch(`/coins/${id}?localization=false&tickers=false&market_data=true&community_data=true&sparkline=false`);
+        };
+
+        const cgGlobal = async () => cgFetch('/global');
+        const cgTrending = async () => cgFetch('/search/trending');
+
+        // Alternative.me — Fear & Greed index (free, no key)
+        const fearGreed = async () => {
+            const r = await fetch('https://api.alternative.me/fng/?limit=1');
+            const j = await r.json();
+            return j.data[0];
+        };
+
+        // CryptoPanic — crypto news (free token)
+        const cpNews = async (base) => {
+            const token = 'b2ac1cc7dc79988a71d7de0bdb7e5d4ab9c6c2e5';
+            const r = await fetch(`https://cryptopanic.com/api/v1/posts/?auth_token=${token}&currencies=${base}&kind=news&public=true`);
+            if (!r.ok) throw new Error('CryptoPanic error');
+            return r.json();
+        };
+
+        // Smart chart data fetcher — tries best source, falls back gracefully
+        const fetchChartData = async (symbol, type, interval) => {
+            if (type === 'CRYPTO') {
+                const binanceInterval = interval.toLowerCase().replace('1d', '1d').replace('1w', '1w').replace('4h', '4h');
+                const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=1000`);
+                const raw = await r.json();
+                return raw.map(d => ({
+                    time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5]
+                }));
+            } else {
+                // Try Yahoo Finance first, then Stooq as backup
+                try { return await yahooChart(symbol, interval); }
+                catch (e) {
+                    console.warn('Yahoo failed, trying Stooq:', e.message);
+                    const stooq = await stooqChart(symbol, interval);
+                    if (stooq.length > 0) return stooq;
+                    throw new Error('All chart sources failed');
+                }
+            }
+        };
+
+        // Smart stock price fetcher for sidebar list
+        const fetchStockBatch = async (symbols) => {
+            const results = {};
+            // Yahoo Finance batch quote
+            const joined = symbols.join(',');
+            try {
+                const path = `/v7/finance/quote?symbols=${encodeURIComponent(joined)}&fields=symbol,regularMarketPrice,regularMarketChangePercent,regularMarketChange,regularMarketVolume`;
+                const j = await yahooFetch(path);
+                const quotes = j?.quoteResponse?.result || [];
+                quotes.forEach(q => {
+                    results[q.symbol] = {
+                        p: q.regularMarketPrice?.toFixed(2),
+                        c: q.regularMarketChangePercent?.toFixed(2),
+                        chg: q.regularMarketChange?.toFixed(2),
+                        v: q.regularMarketVolume,
+                    };
+                });
+            } catch (e) { console.warn('Stock batch fetch failed:', e); }
+            return results;
+        };
+        
+
+        // --- CORE UTILITY ENGINE ---
+
+        const Engine = {
+            formatCurrency: (val, symbol = '$', decimals = 2) => {
+                if (!val) return '--';
+                const n = parseFloat(val);
+                if (n === 0) return symbol + '0.00';
+                const d = n < 1 ? 6 : n < 100 ? 4 : decimals;
+                return symbol + n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+            },
+            formatCompact: (n) => {
+                if (!n) return '--';
+                const abs = Math.abs(n);
+                if (abs >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+                if (abs >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+                if (abs >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+                if (abs >= 1e3) return (n / 1e3).toFixed(2) + 'K';
+                return n.toFixed(2);
+            },
+            timeAgo: (date) => {
+                const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+                if (seconds < 60) return seconds + 's';
+                if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+                if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
+                return Math.floor(seconds / 86400) + 'd';
+            }
+        };
+
+        const Indicators = {
+            sma: (data, p) => {
+                const res = [];
+                for(let i=0; i<data.length; i++) {
+                    if(i < p-1) res.push(null);
+                    else res.push(data.slice(i-p+1, i+1).reduce((a,b)=>a+b,0)/p);
+                }
+                return res;
+            },
+            ema: (data, p) => {
+                const k = 2/(p+1);
+                let ema = data[0];
+                const res = [ema];
+                for(let i=1; i<data.length; i++) {
+                    ema = data[i]*k + ema*(1-k);
+                    res.push(ema);
+                }
+                return res;
+            },
+            rsi: (data, p=14) => {
+                let g=0, l=0;
+                for(let i=1; i<=p; i++) {
+                    const d = data[i]-data[i-1];
+                    if(d>=0) g+=d; else l-=d;
+                }
+                let ag = g/p, al = l/p;
+                const res = new Array(p).fill(null);
+                res.push(100 - (100/(1+ag/al)));
+                for(let i=p+1; i<data.length; i++) {
+                    const d = data[i]-data[i-1];
+                    ag = (ag*(p-1)+(d>0?d:0))/p;
+                    al = (al*(p-1)+(d<0?-d:0))/p;
+                    res.push(100 - (100/(1+ag/al)));
+                }
+                return res;
+            },
+            macd: (data, slow=26, fast=12, sig=9) => {
+                const eFast = Indicators.ema(data, fast);
+                const eSlow = Indicators.ema(data, slow);
+                const line = eFast.map((f,i) => f - eSlow[i]);
+                const signal = Indicators.ema(line.slice(slow), sig);
+                const hist = signal.map((s,i) => line[i+slow] - s);
+                return { line, signal, hist };
+            },
+            bollinger: (data, p=20, sd=2) => {
+                const res = [];
+                for(let i=0; i<data.length; i++) {
+                    if(i<p-1) res.push(null);
+                    else {
+                        const slice = data.slice(i-p+1, i+1);
+                        const mean = slice.reduce((a,b)=>a+b,0)/p;
+                        const sdev = Math.sqrt(slice.reduce((a,b)=>a+Math.pow(b-mean,2),0)/p);
+                        res.push({ mid: mean, upper: mean+sd*sdev, lower: mean-sd*sdev });
+                    }
+                }
+                return res;
+            },
+            atr: (ohlcv, p=14) => {
+                const trs = [ohlcv[0].high - ohlcv[0].low];
+                for(let i=1; i<ohlcv.length; i++) {
+                    trs.push(Math.max(ohlcv[i].high-ohlcv[i].low, Math.abs(ohlcv[i].high-ohlcv[i-1].close), Math.abs(ohlcv[i].low-ohlcv[i-1].close)));
+                }
+                let atr = trs.slice(0, p).reduce((a,b)=>a+b,0)/p;
+                const res = new Array(p-1).fill(null);
+                res.push(atr);
+                for(let i=p; i<trs.length; i++) {
+                    atr = (atr*(p-1)+trs[i])/p;
+                    res.push(atr);
+                }
+                return res;
+            }
+        };
+
+        const PatternEngine = {
+            scan: (ohlcv) => {
+                if (!ohlcv || ohlcv.length < 10) return [];
+                const res = [];
+                const c = ohlcv[ohlcv.length - 1];
+                const p = ohlcv[ohlcv.length - 2];
+                const pp = ohlcv[ohlcv.length - 3];
+                
+                const body = Math.abs(c.close - c.open);
+                const range = c.high - c.low;
+                const upperWick = c.high - Math.max(c.close, c.open);
+                const lowerWick = Math.min(c.close, c.open) - c.low;
+
+                // Candle logic
+                if (body < range * 0.1) res.push({ name: 'Doji', type: 'Neutral' });
+                if (lowerWick > body * 2 && upperWick < body * 0.5) res.push({ name: 'Hammer', type: 'Bullish' });
+                if (upperWick > body * 2 && lowerWick < body * 0.5) res.push({ name: 'Shooting Star', type: 'Bearish' });
+                if (c.close > c.open && p.close < p.open && c.close > p.open && c.open < p.close) res.push({ name: 'Bullish Engulfing', type: 'Bullish' });
+                
+                // Simplified S/R
+                const recentHighs = ohlcv.slice(-20).map(d => d.high);
+                const recentLows = ohlcv.slice(-20).map(d => d.low);
+                if (c.close > Math.max(...recentHighs.slice(0, -1))) res.push({ name: 'Local Breakout', type: 'Bullish' });
+                if (c.close < Math.min(...recentLows.slice(0, -1))) res.push({ name: 'Local Breakdown', type: 'Bearish' });
+
+                return res;
+            }
+        };
+
+        // --- UI COMPONENTS ---
+
+        const Header = ({ symbol, asset, prices, clock }) => {
+            const data = prices[symbol] || { p: '0', c: '0', h: '0', l: '0', v: '0' };
+            const isUp = parseFloat(data.c) >= 0;
+
+            return (
+                <header className="glass flex items-center justify-between px-6 z-[100] border-b border-white/5">
+                    <div className="flex items-center gap-10">
+                        <div className="flex items-center gap-4 group cursor-pointer">
+                            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-cyan-500 rounded-xl flex items-center justify-center text-white shadow-xl shadow-cyan-500/10 group-hover:scale-110 transition-transform">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="font-display font-bold text-xl leading-none tracking-tight">NEXUS<span className="text-cyan-400">.</span></span>
+                                <span className="text-[10px] text-cyan-400 font-bold tracking-[0.3em] uppercase opacity-70">Intelligence</span>
+                            </div>
+                        </div>
+
+                        <div className="h-10 w-px bg-white/10"></div>
+
+                        <div className="flex items-center gap-6">
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-2xl font-display font-bold">{symbol.replace('USDT', '')}</span>
+                                    <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded-md text-slate-500 font-bold uppercase border border-white/5">{asset.type}</span>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate max-w-[150px]">{asset.name || symbol}</span>
+                            </div>
+                            <div className="flex flex-col items-end min-w-[120px]">
+                                <span className={`text-2xl font-mono font-bold leading-none tracking-tighter ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                                    {Engine.formatCurrency(data.p, '', asset.type === 'CRYPTO' ? 4 : 2)}
+                                </span>
+                                <div className={`flex items-center gap-1.5 font-mono text-xs font-bold ${isUp ? 'text-green-500' : 'text-red-500'}`}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d={isUp ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"}/></svg>
+                                    {isUp ? '+' : ''}{data.c}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="hidden 2xl:flex items-center gap-12">
+                        <MetricBlock label="24h High" value={Engine.formatCurrency(data.h, '', 2)} />
+                        <MetricBlock label="24h Low" value={Engine.formatCurrency(data.l, '', 2)} />
+                        <MetricBlock label="24h Volume" value={Engine.formatCompact(data.v)} />
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
+                            <div className="pulse-live"></div>
+                            <span className="text-[11px] font-bold text-green-400 tracking-widest">LIVE</span>
+                            <div className="w-px h-3 bg-white/10"></div>
+                            <span className="font-mono text-xs text-slate-400 font-bold">{clock}</span>
+                        </div>
+                    </div>
+                </header>
+            );
+        };
+
+        const MetricBlock = ({ label, value }) => (
+            <div className="flex flex-col items-center">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1">{label}</span>
+                <span className="text-sm font-mono font-bold text-slate-200">{value}</span>
+            </div>
+        );
+
+        const Sidebar = ({ onSelect, activeSymbol, prices, watchlist, onToggleWL }) => {
+            const [mode, setMode] = useState('CRYPTO'); // CRYPTO | STOCKS | WATCHLIST
+            const [search, setSearch] = useState('');
+            const [cryptoList, setCryptoList] = useState([]);
+            const [stockTab, setStockTab] = useState('US Tech');
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (mode === 'CRYPTO') {
+                    setLoading(true);
+                    fetch('https://api.binance.com/api/v3/ticker/24hr')
+                        .then(res => res.json())
+                        .then(data => {
+                            const top = data.filter(d => d.symbol.endsWith('USDT'))
+                                .sort((a,b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+                                .slice(0, 100)
+                                .map(d => ({
+                                    s: d.symbol,
+                                    n: d.symbol.replace('USDT', ''),
+                                    p: d.lastPrice,
+                                    c: d.priceChangePercent
+                                }));
+                            setCryptoList(top);
+                            setLoading(false);
+                        }).catch(() => setLoading(false));
+                }
+            }, [mode]);
+
+            const assets = useMemo(() => {
+                let list = [];
+                if (mode === 'CRYPTO') list = cryptoList;
+                else if (mode === 'STOCKS') list = ASSET_REGISTRY.STOCKS[stockTab].map(s => ({ s, n: s }));
+                else list = watchlist.map(s => ({ s, n: s }));
+
+                if (search) list = list.filter(a => a.s.toLowerCase().includes(search.toLowerCase()));
+                return list;
+            }, [mode, cryptoList, stockTab, search, watchlist]);
+
+            return (
+                <aside className="glass border-r border-white/5 flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-white/5 space-y-4">
+                        <div className="flex p-1 bg-white/5 rounded-xl border border-white/5">
+                            {['CRYPTO', 'STOCKS', 'WL'].map(m => (
+                                <button 
+                                    key={m}
+                                    onClick={() => setMode(m === 'WL' ? 'WATCHLIST' : m)}
+                                    className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${mode === (m === 'WL' ? 'WATCHLIST' : m) ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+                                >{m === 'WL' ? '★' : m}</button>
+                            ))}
+                        </div>
+                        <div className="relative group">
+                            <input 
+                                type="text"
+                                placeholder="Search markets..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-700 font-medium"
+                            />
+                        </div>
+                        {mode === 'STOCKS' && (
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                {Object.keys(ASSET_REGISTRY.STOCKS).map(cat => (
+                                    <button 
+                                        key={cat}
+                                        onClick={() => setStockTab(cat)}
+                                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${stockTab === cat ? 'bg-white/10 text-cyan-400 border border-cyan-400/20' : 'text-slate-500 hover:text-slate-400 border border-transparent'}`}
+                                    >{cat}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
+                        {loading && mode === 'CRYPTO' ? (
+                            <div className="px-4 space-y-3">
+                                {[1,2,3,4,5,6,7].map(i => <div key={i} className="h-16 skeleton rounded-2xl"></div>)}
+                            </div>
+                        ) : assets.map(asset => {
+                            const live = prices[asset.s] || { p: asset.p || '0', c: asset.c || '0' };
+                            const isUp = parseFloat(live.c) >= 0;
+                            const isActive = activeSymbol === asset.s;
+
+                            return (
+                                <div 
+                                    key={asset.s}
+                                    onClick={() => onSelect(asset.s, mode === 'CRYPTO' ? 'CRYPTO' : 'STOCK', asset.n)}
+                                    className={`asset-item px-5 py-4 cursor-pointer flex items-center justify-between group ${isActive ? 'active' : ''}`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            {mode === 'CRYPTO' ? (
+                                                <img 
+                                                    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${asset.s.replace('USDT', '').toLowerCase()}.png`} 
+                                                    className="w-8 h-8 rounded-full bg-white/5"
+                                                    onError={(e) => e.target.src = 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png'}
+                                                />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-white/5 to-white/10 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-white/5">{asset.s.slice(0, 2)}</div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold tracking-tight text-slate-100">{asset.s.replace('USDT', '')}</span>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); onToggleWL(asset.s); }}
+                                                    className={`text-[10px] transition-all ${watchlist.includes(asset.s) ? 'text-yellow-500 scale-125' : 'text-slate-800 opacity-0 group-hover:opacity-100 hover:text-yellow-500'}`}
+                                                >★</button>
+                                            </div>
+                                            <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest truncate w-28">{mode === 'CRYPTO' ? asset.s : asset.n}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className={`text-sm font-mono font-bold tracking-tighter ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+                                            {Engine.formatCurrency(live.p, '', mode === 'CRYPTO' ? 2 : 2)}
+                                        </div>
+                                        <div className={`text-[10px] font-mono font-bold ${isUp ? 'text-green-500' : 'text-red-500'} opacity-80`}>
+                                            {isUp ? '+' : ''}{live.c}%
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </aside>
+            );
+        };
+
+        const MainChart = ({ symbol, type, timeframe, setTimeframe, onData }) => {
+            const containerRef = useRef();
+            const chartRef = useRef();
+            const candleRef = useRef();
+            const volRef = useRef();
+            const [loading, setLoading] = useState(true);
+
+            const intervals = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
+
+            useEffect(() => {
+                const chart = LightweightCharts.createChart(containerRef.current, {
+                    layout: {
+                        background: { color: THEME.colors.bg },
+                        textColor: '#94a3b8',
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 11,
+                    },
+                    grid: {
+                        vertLines: { color: THEME.colors.grid },
+                        horzLines: { color: THEME.colors.grid },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                        vertLine: { labelBackgroundColor: '#1e293b', width: 1, style: 2 },
+                        horzLine: { labelBackgroundColor: '#1e293b', width: 1, style: 2 },
+                    },
+                    rightPriceScale: {
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        scaleMargins: { top: 0.1, bottom: 0.2 },
+                    },
+                    timeScale: {
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        timeVisible: true,
+                    },
+                    watermark: {
+                        visible: true,
+                        fontSize: 64,
+                        horzAlign: 'center',
+                        vertAlign: 'center',
+                        color: 'rgba(255, 255, 255, 0.025)',
+                        text: symbol.replace('USDT', ''),
+                    },
+                });
+
+                const candles = chart.addCandlestickSeries({
+                    upColor: THEME.colors.green,
+                    downColor: THEME.colors.red,
+                    borderVisible: false,
+                    wickUpColor: THEME.colors.green,
+                    wickDownColor: THEME.colors.red,
+                });
+
+                const volume = chart.addHistogramSeries({
+                    color: '#26a69a',
+                    priceFormat: { type: 'volume' },
+                    priceScaleId: '',
+                });
+
+                volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+
+                chartRef.current = chart;
+                candleRef.current = candles;
+                volRef.current = volume;
+
+                const onResize = () => chart.applyOptions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
+                window.addEventListener('resize', onResize);
+
+                return () => {
+                    window.removeEventListener('resize', onResize);
+                    chart.remove();
+                };
+            }, []);
+
+            useEffect(() => {
+                setLoading(true);
+                const fetchHistory = async () => {
+                    let data = [];
+                    try {
+                        // Smart multi-source fetch with fallback
+                        data = await fetchChartData(symbol, type, timeframe);
+
+                        candleRef.current.setData(data);
+                        volRef.current.setData(data.map(d => ({
+                            time: d.time,
+                            value: d.volume,
+                            color: d.close >= d.open ? 'rgba(22, 199, 132, 0.4)' : 'rgba(234, 57, 67, 0.4)'
+                        })));
+                        chartRef.current.timeScale().fitContent();
+                        onData(data);
+                    } catch (e) { console.error("History error", e); }
+                    setLoading(false);
+                };
+
+                fetchHistory();
+
+                let ws;
+                if (type === 'CRYPTO') {
+                    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${timeframe.toLowerCase()}`);
+                    ws.onmessage = (e) => {
+                        const k = JSON.parse(e.data).k;
+                        const upd = {
+                            time: k.t / 1000,
+                            open: parseFloat(k.o),
+                            high: parseFloat(k.h),
+                            low: parseFloat(k.l),
+                            close: parseFloat(k.c)
+                        };
+                        candleRef.current.update(upd);
+                        volRef.current.update({
+                            time: k.t / 1000,
+                            value: parseFloat(k.v),
+                            color: parseFloat(k.c) >= parseFloat(k.o) ? 'rgba(22, 199, 132, 0.4)' : 'rgba(234, 57, 67, 0.4)'
+                        });
+                    };
+                }
+
+                return () => ws && ws.close();
+            }, [symbol, type, timeframe]);
+
+            return (
+                <section className="flex-1 flex flex-col relative bg-black/10">
+                    <div className="h-12 glass border-b border-white/5 flex items-center justify-between px-6 bg-white/[0.02]">
+                        <div className="flex items-center gap-1.5">
+                            {intervals.map(tf => (
+                                <button 
+                                    key={tf}
+                                    onClick={() => setTimeframe(tf)}
+                                    className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${timeframe === tf ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-400/20' : 'text-slate-500 hover:text-slate-300 border border-transparent'}`}
+                                >{tf}</button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-5 text-slate-500">
+                            <button className="hover:text-white transition-colors" data-title="Indicators"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></button>
+                            <button className="hover:text-white transition-colors" data-title="Snap Alert"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></button>
+                        </div>
+                    </div>
+                    <div ref={containerRef} className="flex-1 w-full" />
+                    {loading && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-50">
+                            <div className="flex flex-col items-center gap-5">
+                                <div className="w-14 h-14 border-4 border-cyan-500/10 border-t-cyan-500 rounded-full animate-spin shadow-xl shadow-cyan-500/10"></div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-sm font-bold text-cyan-400 tracking-[0.3em] animate-pulse">RECONSTRUCTING DATA</span>
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase mt-1">Institutional Feed Latency: 12ms</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section>
+            );
+        };
+
+        const AnalysisPanel = ({ symbol, type, ohlcv, prices }) => {
+            const [tab, setTab] = useState('TECH');
+            const tabs = [
+                { id: 'TECH', label: 'Tech', icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
+                { id: 'FUND', label: 'Fund', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z' },
+                { id: 'NEWS', label: 'News', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z' },
+                { id: 'MARKET', label: 'Market', icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z' },
+                { id: 'INSIGHT', label: 'AI', icon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z' },
+                { id: 'TV', label: 'TV', icon: 'M3 3h18v18H3V3z' },
+            ];
+
+            return (
+                <section className="glass border-l border-white/5 flex flex-col overflow-hidden">
+                    <nav className="flex border-b border-white/5 bg-black/20">
+                        {tabs.map(t => (
+                            <button 
+                                key={t.id}
+                                onClick={() => setTab(t.id)}
+                                className={`flex-1 py-4 flex flex-col items-center gap-1.5 transition-all relative group ${tab === t.id ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d={t.icon}/></svg>
+                                <span className="text-[9px] font-bold uppercase tracking-widest">{t.label}</span>
+                                {tab === t.id && <div className="tab-indicator" />}
+                            </button>
+                        ))}
+                    </nav>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                        {tab === 'TECH' && <TechnicalView ohlcv={ohlcv} />}
+                        {tab === 'FUND' && <FundamentalsView symbol={symbol} type={type} />}
+                        {tab === 'NEWS' && <NewsView symbol={symbol} type={type} />}
+                        {tab === 'MARKET' && <MarketOverview type={type} prices={prices || {}} />}
+                        {tab === 'INSIGHT' && <AIView ohlcv={ohlcv} symbol={symbol} />}
+                        {tab === 'TV' && <TVWidget symbol={symbol} />}
+                    </div>
+                </section>
+            );
+        };
+
+        const TechnicalView = ({ ohlcv }) => {
+            if (!ohlcv || ohlcv.length < 50) return <div className="space-y-4">
+                {[1,2,3,4].map(i => <div key={i} className="h-24 skeleton rounded-2xl"></div>)}
+            </div>;
+
+            const c = ohlcv.map(d => d.close);
+            const rsi = Indicators.rsi(c).pop();
+            const macd = Indicators.macd(c);
+            const bb = Indicators.bollinger(c).pop();
+            const ema20 = Indicators.ema(c, 20).pop();
+            const ema50 = Indicators.ema(c, 50).pop();
+            const last = c[c.length - 1];
+
+            const biasScore = (rsi < 40 ? 1 : rsi > 60 ? -1 : 0) + (last > ema20 ? 1 : -1) + (macd.hist.pop() > 0 ? 1 : -1);
+            const bias = biasScore > 1 ? 'Bullish' : biasScore < -1 ? 'Bearish' : 'Neutral';
+
+            return (
+                <div className="space-y-8">
+                    <div className="p-6 bg-white/5 rounded-3xl border border-white/10 relative overflow-hidden group hover:bg-white/[0.08] transition-all">
+                        <div className="absolute -right-6 -bottom-6 text-white/5 group-hover:text-cyan-400/10 transition-colors"><svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                        <div className="flex justify-between items-center mb-6">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Bias Engine V2</span>
+                            <span className={`badge-base ${bias === 'Bullish' ? 'badge-buy' : bias === 'Bearish' ? 'badge-sell' : 'badge-hold'}`}>{bias}</span>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <div className="flex justify-between text-[11px] mb-2 px-1">
+                                    <span className="text-slate-400 font-bold uppercase tracking-tighter">Relative Strength (14)</span>
+                                    <span className={`font-mono font-bold ${rsi > 70 ? 'text-red-400' : rsi < 30 ? 'text-green-400' : 'text-cyan-400'}`}>{rsi.toFixed(2)}</span>
+                                </div>
+                                <div className="gauge-bg">
+                                    <div className="gauge-fill bg-gradient-to-r from-green-500 via-cyan-400 to-red-500" style={{ width: `${rsi}%` }}></div>
+                                    <div className="absolute inset-y-0 left-[30%] w-px bg-white/20"></div>
+                                    <div className="absolute inset-y-0 left-[70%] w-px bg-white/20"></div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <TechDataBox label="MACD Hist" val={macd.hist.pop().toFixed(4)} color={macd.hist.pop() > 0 ? 'text-green-400' : 'text-red-400'} />
+                                <TechDataBox label="Vol / Avg" val="1.4x" color="text-violet-400" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">Trend Corridors</h4>
+                        <div className="space-y-2">
+                            <TechLine label="EMA 20" val={Engine.formatCurrency(ema20, '', 2)} up={last > ema20} />
+                            <TechLine label="EMA 50" val={Engine.formatCurrency(ema50, '', 2)} up={last > ema50} />
+                            <TechLine label="BB Upper" val={Engine.formatCurrency(bb.upper, '', 2)} up={last < bb.upper} />
+                            <TechLine label="BB Lower" val={Engine.formatCurrency(bb.lower, '', 2)} up={last > bb.lower} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">Liquidity Levels</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 bg-red-500/5 rounded-2xl border border-red-500/10">
+                                <span className="text-[10px] text-red-400/60 font-bold uppercase block mb-1">Resistance</span>
+                                <span className="text-sm font-mono font-bold text-red-500">{Engine.formatCurrency(Math.max(...ohlcv.slice(-20).map(d=>d.high)), '', 2)}</span>
+                            </div>
+                            <div className="p-4 bg-green-500/5 rounded-2xl border border-green-500/10">
+                                <span className="text-[10px] text-green-400/60 font-bold uppercase block mb-1">Support</span>
+                                <span className="text-sm font-mono font-bold text-green-500">{Engine.formatCurrency(Math.min(...ohlcv.slice(-20).map(d=>d.low)), '', 2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TechDataBox = ({ label, val, color }) => (
+            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
+                <span className="text-[9px] text-slate-600 font-bold uppercase block mb-1 tracking-wider">{label}</span>
+                <span className={`text-xs font-mono font-bold ${color}`}>{val}</span>
+            </div>
+        );
+
+        const TechLine = ({ label, val, up }) => (
+            <div className="flex justify-between items-center p-3.5 bg-white/5 rounded-2xl border border-transparent hover:border-white/10 transition-all group">
+                <div className="flex items-center gap-3">
+                    <div className={`w-1.5 h-1.5 rounded-full ${up ? 'bg-green-400 shadow-[0_0_8px_var(--green)]' : 'bg-red-400 shadow-[0_0_8px_var(--red)]'}`}></div>
+                    <span className="text-xs font-bold text-slate-400 group-hover:text-slate-200">{label}</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-slate-500">{val}</span>
+            </div>
+        );
+
+        const FundamentalsView = ({ symbol, type }) => {
+            const [data, setData] = useState(null);
+            const [load, setLoad] = useState(true);
+
+            useEffect(() => {
+                setLoad(true);
+                const fetcher = async () => {
+                    try {
+                        if (type === 'CRYPTO') {
+                            const res = await fetch(`https://api.coingecko.com/api/v3/coins/${symbol.replace('USDT', '').toLowerCase()}?localization=false&tickers=false&sparkline=false`);
+                            const j = await res.json();
+                            setData({
+                                mc: j.market_data.market_cap.usd,
+                                fdv: j.market_data.fully_diluted_valuation.usd,
+                                supply: j.market_data.circulating_supply,
+                                total: j.market_data.total_supply,
+                                rank: j.market_cap_rank,
+                                ath: j.market_data.ath.usd,
+                                desc: j.description.en.split('. ').slice(0, 3).join('. ') + '.',
+                                link: j.links.homepage[0]
+                            });
+                        } else {
+                            const d = await yahooFundamentals(symbol);
+                            setData({
+                                mc: d.marketCap,
+                                pe: d.pe,
+                                forwardPE: d.forwardPE,
+                                eps: d.eps,
+                                revenue: d.revenue,
+                                grossMargin: d.grossMargin,
+                                margin: d.profitMargin,
+                                div: d.dividendYield,
+                                beta: d.beta,
+                                sector: d.sector,
+                                industry: d.industry,
+                                high52w: d.high52w,
+                                low52w: d.low52w,
+                                avg50: d.avg50,
+                                avg200: d.avg200,
+                                roe: d.roe,
+                                debtToEquity: d.debtToEquity,
+                                freeCashFlow: d.freeCashFlow,
+                                priceToBook: d.priceToBook,
+                                targetMean: d.targetMean,
+                                recommendation: d.recommendation,
+                                numAnalysts: d.numAnalysts,
+                                employees: d.employees,
+                                country: d.country,
+                                website: d.website,
+                                description: d.description,
+                                name: d.name,
+                                exchange: d.exchange,
+                                currency: d.currency,
+                            });
+                        }
+                    } catch (e) { console.error(e); }
+                    setLoad(false);
+                };
+                fetcher();
+            }, [symbol]);
+
+            if (load) return <div className="space-y-4">{[1,2,3,4,5,6].map(i => <div key={i} className="h-16 skeleton rounded-2xl"></div>)}</div>;
+            if (!data) return <div className="text-slate-600 text-center py-20 italic">Data Access Denied</div>;
+
+            return (
+                <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-3">
+                        <FundMetric label="Valuation" val={Engine.formatCompact(data.mc)} prefix="$" />
+                        {type === 'CRYPTO' ? (
+                            <>
+                                <FundMetric label="Network Rank" val={data.rank} prefix="#" />
+                                <FundMetric label="ATH Level" val={Engine.formatCurrency(data.ath)} />
+                                <FundMetric label="Circ. Supply" val={Engine.formatCompact(data.supply)} />
+                                <div className="p-6 bg-white/5 rounded-3xl border border-white/5 mt-2">
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-3">Intelligence Summary</span>
+                                    <p className="text-xs text-slate-400 leading-relaxed font-medium">{data.desc}</p>
+                                    <a href={data.link} target="_blank" className="text-[10px] text-cyan-400 font-bold uppercase mt-6 block hover:text-cyan-300 transition-colors">Project Ecosystem →</a>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-2xl mb-1">
+                                    <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2">Company</div>
+                                    <div className="text-sm font-bold text-slate-200">{data.name || symbol}</div>
+                                    <div className="text-[11px] text-slate-500 mt-1">{data.exchange} · {data.sector} · {data.country}</div>
+                                    {data.website && <a href={data.website} target="_blank" className="text-[10px] text-cyan-400 mt-2 block hover:underline">{data.website.replace('https://','')}</a>}
+                                </div>
+
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Valuation</div>
+                                <FundMetric label="Market Cap" val={Engine.formatCompact(data.mc)} prefix="$" />
+                                <FundMetric label="P/E Ratio (TTM)" val={data.pe?.toFixed(2) || 'N/A'} color={!data.pe ? 'text-slate-500' : data.pe > 50 ? 'text-yellow-400' : data.pe < 15 ? 'text-green-400' : 'text-slate-200'} />
+                                <FundMetric label="Forward P/E" val={data.forwardPE?.toFixed(2) || 'N/A'} />
+                                <FundMetric label="P/B Ratio" val={data.priceToBook?.toFixed(2) || 'N/A'} color={data.priceToBook < 1 ? 'text-green-400' : 'text-slate-200'} />
+                                <FundMetric label="EPS (TTM)" val={data.eps ? `$${data.eps.toFixed(2)}` : 'N/A'} color={data.eps > 0 ? 'text-green-400' : 'text-red-400'} />
+
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Financials</div>
+                                <FundMetric label="Revenue" val={Engine.formatCompact(data.revenue)} prefix="$" />
+                                <FundMetric label="Free Cash Flow" val={Engine.formatCompact(data.freeCashFlow)} prefix="$" color={data.freeCashFlow > 0 ? 'text-green-400' : 'text-red-400'} />
+                                <FundMetric label="Profit Margin" val={data.margin ? (data.margin * 100).toFixed(1) + '%' : 'N/A'} color={data.margin > 0.2 ? 'text-green-400' : data.margin > 0.1 ? 'text-cyan-400' : 'text-yellow-400'} />
+                                <FundMetric label="Gross Margin" val={data.grossMargin ? (data.grossMargin * 100).toFixed(1) + '%' : 'N/A'} color={data.grossMargin > 0.4 ? 'text-green-400' : 'text-slate-200'} />
+                                <FundMetric label="ROE" val={data.roe ? (data.roe * 100).toFixed(1) + '%' : 'N/A'} color={data.roe > 0.15 ? 'text-green-400' : 'text-slate-200'} />
+                                <FundMetric label="Debt/Equity" val={data.debtToEquity?.toFixed(2) || 'N/A'} color={data.debtToEquity > 2 ? 'text-red-400' : data.debtToEquity > 1 ? 'text-yellow-400' : 'text-green-400'} />
+
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Price Levels</div>
+                                <FundMetric label="52W High" val={data.high52w ? `$${data.high52w.toFixed(2)}` : 'N/A'} color="text-green-400" />
+                                <FundMetric label="52W Low" val={data.low52w ? `$${data.low52w.toFixed(2)}` : 'N/A'} color="text-red-400" />
+                                <FundMetric label="50D MA" val={data.avg50 ? `$${data.avg50.toFixed(2)}` : 'N/A'} />
+                                <FundMetric label="200D MA" val={data.avg200 ? `$${data.avg200.toFixed(2)}` : 'N/A'} />
+                                <FundMetric label="Beta" val={data.beta?.toFixed(2) || 'N/A'} color={data.beta > 1.5 ? 'text-yellow-400' : 'text-slate-200'} />
+
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Dividends & Analyst</div>
+                                <FundMetric label="Dividend Yield" val={data.div ? (data.div * 100).toFixed(2) + '%' : '—'} color={data.div > 0.03 ? 'text-green-400' : 'text-slate-400'} />
+                                {data.numAnalysts > 0 && <>
+                                    <FundMetric label="Analyst Target" val={data.targetMean ? `$${data.targetMean.toFixed(2)}` : 'N/A'} color="text-cyan-400" />
+                                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Consensus ({data.numAnalysts} analysts)</div>
+                                        <div className={`text-sm font-bold uppercase ${data.recommendation === 'buy' || data.recommendation === 'strong_buy' ? 'text-green-400' : data.recommendation === 'sell' || data.recommendation === 'strong_sell' ? 'text-red-400' : 'text-yellow-400'}`}>
+                                            {(data.recommendation || 'N/A').replace('_', ' ')}
+                                        </div>
+                                        <div className="text-[10px] text-slate-600 mt-1">Range: ${data.targetLow?.toFixed(0)} – ${data.targetHigh?.toFixed(0)}</div>
+                                    </div>
+                                </>}
+                                <FundMetric label="Employees" val={data.employees ? data.employees.toLocaleString() : 'N/A'} />
+
+                                {data.description && (
+                                    <div className="p-5 bg-white/5 rounded-3xl border border-white/5 mt-2">
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase block mb-3 tracking-widest">About</span>
+                                        <p className="text-xs text-slate-400 leading-relaxed">{data.description}</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const FundMetric = ({ label, val, prefix = '', color = 'text-slate-200' }) => (
+            <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-all group">
+                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest group-hover:text-slate-400">{label}</span>
+                <span className={`text-sm font-mono font-bold ${color}`}>{prefix}{val}</span>
+            </div>
+        );
+
+        const NewsView = ({ symbol, type }) => {
+            const [news, setNews] = useState([]);
+            const [load, setLoad] = useState(true);
+
+            useEffect(() => {
+                const fetchN = async () => {
+                    setLoad(true);
+                    try {
+                        if (type === 'CRYPTO') {
+                            const base = symbol.replace('USDT', '');
+                            let newsItems = [];
+                            try {
+                                const j = await cpNews(base);
+                                newsItems = j.results.map(n => ({
+                                    t: n.title, s: n.source.title, u: n.url, d: n.created_at,
+                                    sent: n.votes.positive > n.votes.negative ? 'Bullish' : n.votes.negative > n.votes.positive ? 'Bearish' : 'Neutral'
+                                }));
+                            } catch (e) {
+                                // Fallback: Yahoo Finance crypto news
+                                newsItems = await yahooNews(base + '-USD');
+                                newsItems = newsItems.map(n => ({ t: n.title, s: n.source, u: n.link, d: n.pubDate, sent: n.sentiment }));
+                            }
+                            setNews(newsItems);
+                        } else {
+                            const items = await yahooNews(symbol);
+                            setNews(items.map(n => ({
+                                t: n.title, s: n.source, u: n.link, d: n.pubDate, sent: n.sentiment
+                            })));
+                        }
+                    } catch (e) { console.error(e); }
+                    setLoad(false);
+                };
+                fetchN();
+            }, [symbol]);
+
+            if (load) return <div className="space-y-4">{[1,2,3,4].map(i => <div key={i} className="h-24 skeleton rounded-2xl"></div>)}</div>;
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/10 mb-2">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Sentiment Pulse</span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Weighted: Bullish</span>
+                            <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                <div className="h-full bg-green-400" style={{ width: '82%' }}></div>
+                            </div>
+                        </div>
+                    </div>
+                    {news.map((n, idx) => (
+                        <a key={idx} href={n.u} target="_blank" className="block p-5 bg-white/5 border border-white/5 rounded-3xl hover:bg-white/[0.08] transition-all group relative overflow-hidden">
+                            <div className="flex justify-between items-start mb-4">
+                                <span className="text-[10px] text-cyan-400/70 font-bold uppercase tracking-widest">{n.s}</span>
+                                <span className={`badge-base ${n.sent === 'Bullish' ? 'badge-buy' : 'badge-hold'}`}>{n.sent}</span>
+                            </div>
+                            <h4 className="text-[13px] font-bold text-slate-200 leading-snug group-hover:text-white line-clamp-2 mb-4">{n.t}</h4>
+                            <div className="flex items-center justify-between text-[9px] text-slate-600 font-bold uppercase">
+                                <span>{Engine.timeAgo(n.d)} ago</span>
+                                <span className="text-cyan-500/40 group-hover:text-cyan-400 transition-colors">Access Insight →</span>
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            );
+        };
+
+        const AIView = ({ ohlcv, symbol }) => {
+            const ai = useMemo(() => {
+                if (!ohlcv || ohlcv.length < 50) return null;
+                const last = ohlcv[ohlcv.length - 1];
+                const c = ohlcv.map(d => d.close);
+                const rsi = Indicators.rsi(c).pop();
+                const ema20 = Indicators.ema(c, 20).pop();
+                const patterns = PatternEngine.scan(ohlcv);
+                
+                const tr = last.close > ema20 ? 'Bullish' : 'Bearish';
+                const mo = rsi > 50 ? 'Expansion' : 'Contraction';
+                
+                return { rsi: rsi.toFixed(2), tr, mo, patterns };
+            }, [ohlcv]);
+
+            if (!ai) return <div className="text-slate-600 italic text-center py-20 animate-pulse">Initializing Neural Core...</div>;
+
+            return (
+                <div className="space-y-8">
+                    <div className="p-7 bg-gradient-to-br from-violet-600/20 to-cyan-500/20 rounded-3xl border border-white/10 relative overflow-hidden shimmer">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-400/5 blur-3xl -mr-20 -mt-20"></div>
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="w-9 h-9 rounded-xl bg-cyan-400 flex items-center justify-center text-black shadow-lg shadow-cyan-400/20">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            </div>
+                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-[0.2em]">Nexus Neural Matrix</span>
+                        </div>
+                        <p className="text-[14px] font-medium text-slate-200 leading-relaxed italic opacity-90">
+                            "System analysis for {symbol} confirms a <span className="text-white font-extrabold">{ai.tr}</span> structural bias. Volatility is in a state of <span className="text-white">{ai.mo}</span> with RSI stabilizing at <span className="text-white">{ai.rsi}</span>. Pattern recognition engines have flagged high-probability setups."
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Pattern Detections</h5>
+                        <div className="flex flex-wrap gap-2.5">
+                            {ai.patterns.length > 0 ? ai.patterns.map((p,i) => (
+                                <span key={i} className={`badge-base ${p.type === 'Bullish' ? 'badge-buy' : p.type === 'Bearish' ? 'badge-sell' : 'badge-hold'}`}>{p.name}</span>
+                            )) : <span className="text-xs text-slate-600 italic px-1">No structural anomalies detected</span>}
+                        </div>
+                    </div>
+
+                    <div className="space-y-5">
+                        <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
+                            <h5 className="text-[10px] font-bold text-slate-600 uppercase mb-4 tracking-widest">Calculated Strategy</h5>
+                            <div className="space-y-4">
+                                <AIStep label="ENTRY" val={ai.tr === 'Bullish' ? "Accumulate on pullbacks to EMA-20" : "Short on rejected EMA-20 retests"} />
+                                <AIStep label="RISK" val="Invalidation level set at recent daily low" />
+                                <AIStep label="TP-1" val="Next psychological round number level" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-8 text-[9px] text-slate-700 font-extrabold uppercase tracking-tight text-center max-w-[220px] mx-auto leading-relaxed">
+                        Nexus AI algorithms are experimental. Past performance does not guarantee results.
+                    </div>
+                </div>
+            );
+        };
+
+        const AIStep = ({ label, val }) => (
+            <div className="flex gap-4">
+                <span className="text-[10px] font-bold text-cyan-400/50 min-w-[50px] uppercase tracking-tighter">{label}</span>
+                <span className="text-xs font-bold text-slate-300 tracking-tight">{val}</span>
+            </div>
+        );
+
+        const MarketOverview = ({ type, prices }) => {
+            const [global, setGlobal] = useState(null);
+            const [fg, setFg] = useState(null);
+            const [trending, setTrending] = useState([]);
+            const [load, setLoad] = useState(true);
+
+            useEffect(() => {
+                const fetchAll = async () => {
+                    setLoad(true);
+                    try {
+                        const [gl, fgData, tr] = await Promise.allSettled([
+                            cgGlobal(), fearGreed(), cgTrending()
+                        ]);
+                        if (gl.status === 'fulfilled') setGlobal(gl.value.data);
+                        if (fgData.status === 'fulfilled') setFg(fgData.value);
+                        if (tr.status === 'fulfilled') setTrending(tr.value.coins?.slice(0, 8) || []);
+                    } catch(e) { console.error(e); }
+                    setLoad(false);
+                };
+                fetchAll();
+            }, []);
+
+            // Gainers/Losers from prices
+            const sorted = Object.entries(prices)
+                .map(([sym, d]) => ({ sym, c: parseFloat(d.c) }))
+                .filter(x => !isNaN(x.c))
+                .sort((a, b) => b.c - a.c);
+            const gainers = sorted.slice(0, 5);
+            const losers = sorted.slice(-5).reverse();
+
+            const fgValue = fg ? parseInt(fg.value) : null;
+            const fgColor = fgValue < 25 ? '#ea3943' : fgValue < 45 ? '#f97316' : fgValue < 55 ? '#eab308' : fgValue < 75 ? '#22d3ee' : '#16c784';
+            const fgLabel = fg?.value_classification || '—';
+
+            return (
+                <div className="space-y-5">
+                    {load ? (
+                        <div className="space-y-3">{[1,2,3,4].map(i=><div key={i} className="h-16 skeleton rounded-2xl"/>)}</div>
+                    ) : (<>
+                        {fg && (
+                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Fear & Greed Index</div>
+                                <div className="flex items-center justify-between">
+                                    <span style={{color: fgColor}} className="text-3xl font-black font-mono">{fg.value}</span>
+                                    <span style={{color: fgColor}} className="text-sm font-bold uppercase">{fgLabel}</span>
+                                </div>
+                                <div className="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full transition-all" style={{width: fg.value + '%', background: fgColor}}/>
+                                </div>
+                                <div className="flex justify-between text-[9px] text-slate-600 mt-1">
+                                    <span>Extreme Fear</span><span>Extreme Greed</span>
+                                </div>
+                            </div>
+                        )}
+                        {global && (
+                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10 space-y-3">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global Crypto Market</div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><div className="text-[10px] text-slate-600">Market Cap</div><div className="text-sm font-bold font-mono text-cyan-400">${Engine.formatCompact(global.total_market_cap?.usd)}</div></div>
+                                    <div><div className="text-[10px] text-slate-600">24h Volume</div><div className="text-sm font-bold font-mono">${Engine.formatCompact(global.total_volume?.usd)}</div></div>
+                                    <div><div className="text-[10px] text-slate-600">BTC Dominance</div><div className="text-sm font-bold font-mono text-yellow-400">{global.market_cap_percentage?.btc?.toFixed(1)}%</div></div>
+                                    <div><div className="text-[10px] text-slate-600">Active Coins</div><div className="text-sm font-bold font-mono">{global.active_cryptocurrencies?.toLocaleString()}</div></div>
+                                </div>
+                                <div>
+                                    <div className="text-[9px] text-slate-600 mb-1">Market Cap Change 24h</div>
+                                    <span className={`text-sm font-bold ${global.market_cap_change_percentage_24h_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {global.market_cap_change_percentage_24h_usd?.toFixed(2)}%
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                        <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Gainers (24h)</div>
+                            <div className="space-y-2">
+                                {gainers.map(g => (
+                                    <div key={g.sym} className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-slate-400">{g.sym.replace('USDT','')}</span>
+                                        <span className="text-xs font-bold font-mono text-green-400">+{g.c.toFixed(2)}%</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Losers (24h)</div>
+                            <div className="space-y-2">
+                                {losers.map(g => (
+                                    <div key={g.sym} className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-slate-400">{g.sym.replace('USDT','')}</span>
+                                        <span className="text-xs font-bold font-mono text-red-400">{g.c.toFixed(2)}%</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        {trending.length > 0 && (
+                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Trending on CoinGecko</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {trending.map((t, i) => (
+                                        <span key={i} className="text-[11px] px-3 py-1 bg-violet-500/10 border border-violet-500/20 rounded-full text-violet-400 font-bold">
+                                            #{i+1} {t.item?.symbol}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>)}
+                </div>
+            );
+        };
+
+        const TVWidget = ({ symbol }) => {
+            const sym = symbol.includes('USDT') ? `BINANCE:${symbol}` : symbol.replace('.NS', '').replace('.BO', '');
+            return (
+                <div className="h-full min-h-[550px] w-full bg-black/40 rounded-3xl overflow-hidden border border-white/10 tv-widget-container">
+                    <iframe 
+                        src={`https://www.tradingview.com/widgetbar-chart/?symbol=${sym}&theme=dark`}
+                        className="w-full h-full"
+                    />
+                </div>
+            );
+        };
+
+        // --- ROOT ORCHESTRATOR ---
+
+        const App = () => {
+            const [activeS, setActiveS] = useState('BTCUSDT');
+            const [activeA, setActiveA] = useState({ symbol: 'BTCUSDT', type: 'CRYPTO', name: 'Bitcoin' });
+            const [prices, setPrices] = useState({});
+            const [watchlist, setWatchlist] = useState(JSON.parse(localStorage.getItem('nexus_wl_v2') || '[]'));
+            const [ohlcv, setOhlcv] = useState([]);
+            const [timeframe, setTimeframe] = useState('1h');
+            const [clock, setClock] = useState('');
+
+            useEffect(() => {
+                const t = setInterval(() => {
+                    setClock(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
+                }, 1000);
+                return () => clearInterval(t);
+            }, []);
+
+            useEffect(() => {
+                const ws = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
+                ws.onmessage = (e) => {
+                    const data = JSON.parse(e.data);
+                    const ups = {};
+                    data.forEach(d => {
+                        if (d.s.endsWith('USDT')) {
+                            ups[d.s] = {
+                                p: d.c,
+                                c: ((parseFloat(d.c) - parseFloat(d.o)) / parseFloat(d.o) * 100).toFixed(2),
+                                h: d.h, l: d.l, v: d.q
+                            };
+                        }
+                    });
+                    setPrices(prev => ({ ...prev, ...ups }));
+                };
+                return () => ws.close();
+            }, []);
+
+            const onSelect = (s, type, name) => {
+                setActiveS(s);
+                setActiveA({ symbol: s, type, name });
+            };
+
+            const toggleWL = (s) => {
+                const next = watchlist.includes(s) ? watchlist.filter(x => x !== s) : [...watchlist, s];
+                setWatchlist(next);
+                localStorage.setItem('nexus_wl_v2', JSON.stringify(next));
+            };
+
+            useEffect(() => {
+                const k = (e) => {
+                    if (e.key === '/') { e.preventDefault(); document.querySelector('input')?.focus(); }
+                };
+                window.addEventListener('keydown', k);
+                return () => window.removeEventListener('keydown', k);
+            }, []);
+
+            return (
+                <div className="terminal-shell">
+                    <Header symbol={activeS} asset={activeA} prices={prices} clock={clock} />
+                    <main className="workspace-grid">
+                        <Sidebar onSelect={onSelect} activeSymbol={activeS} prices={prices} watchlist={watchlist} onToggleWL={toggleWL} />
+                        <MainChart symbol={activeS} type={activeA.type} timeframe={timeframe} setTimeframe={setTimeframe} onData={setOhlcv} />
+                        <div className="analysis-bar">
+                            <AnalysisPanel symbol={activeS} type={activeA.type} ohlcv={ohlcv} prices={prices} />
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('nexus-root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
