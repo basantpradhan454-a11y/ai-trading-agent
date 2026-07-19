@@ -1,1565 +1,1556 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus Terminal | Professional Asset Intelligence & Trading</title>
-    
-    <!-- Design System: Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Scripts: React & Charting Core -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
-
-    <style>
-        :root {
-            --bg: #0a0e14;
-            --bg-deep: #060811;
-            --panel: rgba(18, 22, 31, 0.72);
-            --cyan: #22d3ee;
-            --violet: #7c6ff0;
-            --green: #16c784;
-            --red: #ea3943;
-            --border: rgba(255, 255, 255, 0.08);
-            --text-main: #f8fafc;
-            --text-dim: #94a3b8;
-            --text-dark: #64748b;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        body {
-            background-color: var(--bg);
-            background: radial-gradient(circle at 10% 10%, rgba(124, 111, 240, 0.12), transparent 40%),
-                        radial-gradient(circle at 90% 90%, rgba(34, 211, 238, 0.08), transparent 40%),
-                        var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            cursor: default;
-        }
-
-        /* Typefaces */
-        .font-display { font-family: 'Space Grotesk', sans-serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
-
-        /* Component Classes */
-        .glass {
-            background: var(--panel);
-            backdrop-filter: blur(24px);
-            border: 1px solid var(--border);
-        }
-
-        .shimmer {
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
-            background-size: 200% 100%;
-            animation: shimmer 2s infinite linear;
-        }
-        @keyframes shimmer {
-            0% { background-position: -200% 0; }
-            100% { background-position: 200% 0; }
-        }
-
-        .pulse-live {
-            width: 8px;
-            height: 8px;
-            background: var(--green);
-            border-radius: 50%;
-            box-shadow: 0 0 12px var(--green);
-            animation: pulse-op 2s infinite ease-in-out;
-        }
-        @keyframes pulse-op {
-            0% { opacity: 0.4; transform: scale(0.85); }
-            50% { opacity: 1; transform: scale(1.1); }
-            100% { opacity: 0.4; transform: scale(0.85); }
-        }
-
-        .tab-indicator {
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--cyan);
-            box-shadow: 0 0 10px var(--cyan);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Asset Rows */
-        .asset-item {
-            border-left: 3px solid transparent;
-            transition: all 0.15s ease-out;
-        }
-        .asset-item:hover {
-            background: rgba(255, 255, 255, 0.04);
-        }
-        .asset-item.active {
-            background: linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent);
-            border-left-color: var(--cyan);
-        }
-
-        /* Grid Layout */
-        .terminal-shell {
-            display: grid;
-            grid-template-rows: 64px 1fr;
-            height: 100vh;
-        }
-
-        .workspace-grid {
-            display: grid;
-            grid-template-columns: 280px 1fr 340px;
-            overflow: hidden;
-        }
-
-        /* Technical Indicator Gauges */
-        .gauge-bg { height: 6px; border-radius: 10px; background: rgba(255,255,255,0.05); position: relative; overflow: hidden; }
-        .gauge-fill { height: 100%; border-radius: 10px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-
-        .badge-base {
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .badge-buy { background: rgba(22, 199, 132, 0.12); color: var(--green); border: 1px solid rgba(22, 199, 132, 0.2); }
-        .badge-sell { background: rgba(234, 57, 67, 0.12); color: var(--red); border: 1px solid rgba(234, 57, 67, 0.2); }
-        .badge-hold { background: rgba(148, 163, 184, 0.12); color: var(--text-dim); border: 1px solid rgba(148, 163, 184, 0.2); }
-
-        /* TradingView Widget Overrides */
-        .tv-widget-container iframe {
-            border: none !important;
-            border-radius: 8px !important;
-        }
-
-        /* Tooltip Logic */
-        [data-title] { position: relative; }
-        [data-title]:hover::after {
-            content: attr(data-title);
-            position: absolute;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 4px 8px;
-            background: #1e293b;
-            color: white;
-            font-size: 10px;
-            border-radius: 4px;
-            white-space: nowrap;
-            z-index: 999;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-        }
-
-        @media (max-width: 1200px) {
-            .workspace-grid { grid-template-columns: 240px 1fr 0px; }
-            .analysis-bar { display: none; }
-        }
-    </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Nexus Terminal — Pro Trading Dashboard</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e14;--bg2:#060811;--border:rgba(255,255,255,0.07);--bh:rgba(34,211,238,0.3);--cyan:#22d3ee;--violet:#7c6ff0;--green:#16c784;--red:#ea3943;--amber:#f59e0b;--text:#e7ebf3;--dim:#8b93a7;--faint:#545c6e;--fd:'Space Grotesk',sans-serif;--fb:'Inter',sans-serif;--fm:'JetBrains Mono',monospace;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;background:var(--bg);overflow:hidden}
+body{font-family:var(--fb);color:var(--text);background:radial-gradient(ellipse 800px 400px at 10% -10%,rgba(124,111,240,.12),transparent),radial-gradient(ellipse 700px 500px at 90% 110%,rgba(34,211,238,.08),transparent),var(--bg2)}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+input,select{font-family:inherit}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,211,238,.5)}100%{box-shadow:0 0 0 10px rgba(34,211,238,0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:-400% 0}100%{background-position:400% 0}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.skel{background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.03) 75%);background-size:400% 100%;animation:shimmer 1.6s infinite;border-radius:7px}
+.spin{width:18px;height:18px;border:2px solid rgba(34,211,238,.2);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite}
+.shell{height:100vh;display:grid;grid-template-rows:54px 1fr}
+.hdr{background:rgba(6,8,17,.92);backdrop-filter:blur(18px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:30}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-mark{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(124,111,240,.18));border:1px solid rgba(34,211,238,.25);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:13px;font-weight:700;color:var(--cyan)}
+.logo-name{font-family:var(--fd);font-weight:700;font-size:15px;letter-spacing:-.02em}
+.logo-accent{background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hdr-center{display:flex;align-items:center;gap:12px}
+.hdr-sym{font-size:12px;font-weight:700;color:var(--dim);letter-spacing:.05em}
+.hdr-price{font-family:var(--fm);font-size:14px;font-weight:700}
+.hdr-price.up{color:var(--green)}.hdr-price.dn{color:var(--red)}
+.hdr-chg{font-size:11px;opacity:.8}
+.hdr-indices{display:flex;gap:6px;margin-left:6px}
+.idx-chip{padding:3px 8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:border-color .15s;text-align:center}
+.idx-chip:hover{border-color:var(--bh)}
+.idx-name{color:var(--faint);font-weight:700;font-size:8.5px;letter-spacing:.05em;display:block}
+.idx-val{font-family:var(--fm);font-weight:700;font-size:10.5px;display:block}
+.idx-val.up{color:var(--green)}.idx-val.dn{color:var(--red)}
+.idx-chg{font-size:9px;display:block}
+.hdr-right{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--faint)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 7px var(--green);animation:pulse 2s infinite;flex-shrink:0}
+.body{display:grid;grid-template-columns:265px 1fr 345px;min-height:0;overflow:hidden}
+.left{border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;background:rgba(8,11,19,.6)}
+.mode-bar{display:flex;gap:3px;padding:8px 8px 4px}
+.mbt{flex:1;padding:6px 0;font-size:10.5px;font-weight:700;letter-spacing:.04em;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--faint);transition:all .15s}
+.mbt.on{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.25);color:var(--cyan)}
+.cat-scroll{display:flex;overflow-x:auto;padding:3px 8px 5px;gap:3px;flex-shrink:0}
+.cat-scroll::-webkit-scrollbar{height:2px}
+.cbt{padding:4px 8px;font-size:9.5px;font-weight:700;white-space:nowrap;flex-shrink:0;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--faint);transition:all .12s}
+.cbt.on{background:rgba(124,111,240,.1);border-color:rgba(124,111,240,.3);color:var(--violet)}
+.srch{position:relative;padding:5px 8px;flex-shrink:0}
+.srch input{width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:7px;padding:7px 24px 7px 28px;color:var(--text);font-size:11.5px;transition:border-color .15s,background .15s}
+.srch input:focus{outline:none;border-color:var(--bh);background:rgba(34,211,238,.04)}
+.srch input::placeholder{color:var(--faint)}
+.srch-ico{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--faint);pointer-events:none;font-size:11px}
+.srch-x{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:transparent;color:var(--faint);font-size:14px;padding:2px}
+.aset-list{flex:1;overflow-y:auto;padding:2px 5px 8px}
+.arow{width:100%;display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:7px;background:transparent;border:1px solid transparent;text-align:left;transition:all .12s}
+.arow:hover{background:rgba(255,255,255,.03)}
+.arow.on{background:linear-gradient(90deg,rgba(34,211,238,.08),rgba(124,111,240,.04));border-color:rgba(34,211,238,.2)}
+.aico{width:23px;height:23px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,.05)}
+.aico-fb{width:23px;height:23px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,rgba(34,211,238,.2),rgba(124,111,240,.2));display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:var(--cyan)}
+.sico-fb{width:23px;height:23px;border-radius:5px;flex-shrink:0;background:rgba(124,111,240,.15);border:1px solid rgba(124,111,240,.2);display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;color:var(--violet)}
+.ainfo{flex:1;min-width:0}
+.asym{font-size:11.5px;font-weight:700;color:var(--text)}
+.aname{font-size:9.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apx{text-align:right;flex-shrink:0}
+.aprice{font-family:var(--fm);font-size:11px;font-weight:600}
+.achg{font-size:9.5px;margin-top:1px}
+.achg.up{color:var(--green)}.achg.dn{color:var(--red)}
+.ctr{display:flex;flex-direction:column;min-height:0}
+.chart-bar{display:flex;align-items:center;gap:5px;padding:7px 10px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;background:rgba(6,8,17,.7)}
+.tfs{display:flex;gap:2px;background:rgba(255,255,255,.03);padding:2px;border-radius:6px;border:1px solid var(--border)}
+.tfb{background:transparent;color:var(--faint);font-size:11px;font-weight:700;padding:4px 8px;border-radius:4px;transition:all .12s}
+.tfb:hover{color:var(--text)}.tfb.on{background:rgba(34,211,238,.12);color:var(--cyan)}
+.itogs{display:flex;gap:3px;margin-left:auto}
+.itog{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--dim);font-size:10px;font-weight:700;padding:4px 8px;border-radius:5px;letter-spacing:.04em;transition:all .12s}
+.itog:hover{border-color:var(--bh);color:var(--cyan)}.itog.on{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.25);color:var(--cyan)}
+.chart-load{height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);background-size:200% 100%;animation:shimmer 1.2s infinite;flex-shrink:0}
+.chart-wrap{flex:1;min-height:0;position:relative}
+.right{border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;background:rgba(8,11,19,.6)}
+.panel-hdr{padding:11px 13px 7px;border-bottom:1px solid var(--border);flex-shrink:0}
+.panel-ttl{font-family:var(--fd);font-weight:700;font-size:13.5px}
+.panel-sub{font-size:9.5px;color:var(--faint);margin-top:2px}
+.tabs-row{display:flex;overflow-x:auto;padding:5px 7px;gap:3px;border-bottom:1px solid var(--border);flex-shrink:0}
+.tabs-row::-webkit-scrollbar{height:2px}
+.tab{flex-shrink:0;padding:4px 9px;font-size:9.5px;font-weight:700;letter-spacing:.04em;background:transparent;border:1px solid transparent;border-radius:5px;color:var(--faint);transition:all .12s;text-transform:uppercase}
+.tab:hover{color:var(--dim)}.tab.on{background:rgba(124,111,240,.1);border-color:rgba(124,111,240,.25);color:var(--violet)}
+.tab-body{flex:1;overflow-y:auto;padding:11px 13px}
+.sec-hd{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:700;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border)}
+.sec-hd:first-child{margin-top:0}
+.ind-row{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);margin-bottom:3px;gap:6px}
+.ind-row:hover{background:rgba(255,255,255,.04)}
+.ind-lbl{font-size:10.5px;color:var(--faint);flex:1}
+.ind-val{font-family:var(--fm);font-size:11px;font-weight:700}
+.sig{font-size:9px;font-weight:800;padding:2px 6px;border-radius:9px;letter-spacing:.04em;white-space:nowrap}
+.sig.sb{background:rgba(22,199,132,.15);color:#0fba79;border:1px solid rgba(22,199,132,.25)}
+.sig.b{background:rgba(22,199,132,.1);color:var(--green);border:1px solid rgba(22,199,132,.18)}
+.sig.ss{background:rgba(234,57,67,.15);color:#e0202c;border:1px solid rgba(234,57,67,.25)}
+.sig.s{background:rgba(234,57,67,.1);color:var(--red);border:1px solid rgba(234,57,67,.18)}
+.sig.n{background:rgba(255,255,255,.05);color:var(--faint);border:1px solid var(--border)}
+.sig.w{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.gauge{margin:2px 0 7px}
+.g-track{height:5px;border-radius:4px;background:rgba(255,255,255,.05);position:relative;display:flex;overflow:visible}
+.g-needle{position:absolute;top:-3px;width:2px;height:11px;background:#fff;border-radius:2px;box-shadow:0 0 5px rgba(255,255,255,.7);transform:translateX(-50%);transition:left .4s cubic-bezier(.34,1.56,.64,1)}
+.g-labels{display:flex;justify-content:space-between;font-size:8.5px;color:var(--faint);margin-top:2px}
+.overall{padding:9px;border-radius:8px;text-align:center;margin-bottom:8px;border:1px solid}
+.overall.buy{background:rgba(22,199,132,.07);border-color:rgba(22,199,132,.2)}
+.overall.sell{background:rgba(234,57,67,.07);border-color:rgba(234,57,67,.2)}
+.overall.neutral{background:rgba(255,255,255,.03);border-color:var(--border)}
+.overall-lbl{font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin-bottom:2px}
+.overall-val{font-size:14px;font-weight:800;font-family:var(--fd)}
+.sr-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sr-hd{font-size:10px;font-weight:700;margin-bottom:4px}.sr-hd.r{color:var(--red)}.sr-hd.s{color:var(--green)}
+.sr-lv{font-family:var(--fm);font-size:10.5px;color:var(--dim);padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.pc{display:inline-block;padding:2px 7px;border-radius:9px;font-size:9.5px;font-weight:700;margin:2px;border:1px solid}
+.pc.b{background:rgba(22,199,132,.1);color:var(--green);border-color:rgba(22,199,132,.2)}
+.pc.s{background:rgba(234,57,67,.1);color:var(--red);border-color:rgba(234,57,67,.2)}
+.pc.n{background:rgba(255,255,255,.04);color:var(--faint);border-color:var(--border)}
+.fund-hdr{padding:9px 11px;border-radius:8px;background:rgba(124,111,240,.07);border:1px solid rgba(124,111,240,.15);margin-bottom:7px}
+.fund-blk{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:7px;padding:9px;margin-bottom:5px}
+.fund-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:11px}
+.fund-row:last-child{border-bottom:none}
+.fund-lbl{color:var(--faint)}.fund-val{font-family:var(--fm);font-weight:700;font-size:10.5px}
+.fund-val.p{color:var(--green)}.fund-val.n{color:var(--red)}.fund-val.w{color:var(--amber)}
+.about{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:7px;padding:9px;font-size:10.5px;line-height:1.6;color:var(--dim)}
+.news-item{display:flex;flex-direction:column;gap:4px;padding:8px 9px;border-radius:7px;background:rgba(255,255,255,.02);border:1px solid var(--border);margin-bottom:4px;text-decoration:none;color:inherit;transition:background .12s,border-color .12s}
+.news-item:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1)}
+.news-ttl{font-size:11px;color:var(--text);line-height:1.4}
+.news-meta{display:flex;align-items:center;gap:5px;font-size:9.5px;color:var(--faint);flex-wrap:wrap}
+.sent{font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:7px;letter-spacing:.04em}
+.sent.bull{background:rgba(22,199,132,.12);color:var(--green)}
+.sent.bear{background:rgba(234,57,67,.12);color:var(--red)}
+.sent.neut{background:rgba(255,255,255,.05);color:var(--faint)}
+.news-vid{display:flex;gap:8px;padding:7px 9px;border-radius:7px;background:rgba(234,57,67,.06);border:1px solid rgba(234,57,67,.18);margin-bottom:4px;text-decoration:none;color:inherit;transition:background .12s}
+.news-vid:hover{background:rgba(234,57,67,.1)}
+.yt-play{font-size:16px;display:flex;align-items:center;justify-content:center;width:58px;height:34px;flex-shrink:0;background:rgba(234,57,67,.2);border-radius:4px;color:var(--red)}
+.vid-ttl{font-size:10.5px;line-height:1.35;color:var(--text);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vid-src{font-size:9px;color:var(--faint);margin-top:2px}
+.sent-meter{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:7px;background:rgba(255,255,255,.03);border:1px solid var(--border);margin-bottom:7px;font-size:10.5px}
+.mkt-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px}
+.mkt-stat{padding:8px 10px;border-radius:7px;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+.mkt-lbl{font-size:8.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin-bottom:2px}
+.mkt-val{font-family:var(--fm);font-size:12px;font-weight:700}
+.fg-ring{position:relative;width:80px;height:80px;margin:0 auto 5px}
+.fg-ring svg{transform:rotate(-90deg)}
+.fg-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+.fg-num{font-family:var(--fm);font-size:19px;font-weight:800;line-height:1}
+.fg-lbl{font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.gain-row{display:flex;justify-content:space-between;align-items:center;padding:4px 7px;border-radius:5px;background:rgba(255,255,255,.02);margin-bottom:2px;font-size:10.5px}
+.ai-card{background:linear-gradient(135deg,rgba(124,111,240,.1),rgba(34,211,238,.06));border:1px solid rgba(124,111,240,.2);border-radius:9px;padding:11px;margin-bottom:7px}
+.ai-verdict{font-size:15px;font-weight:800;font-family:var(--fd);text-align:center;padding:6px 0 3px}
+.ai-score{font-size:9.5px;color:var(--faint);text-align:center;margin-bottom:7px}
+.ai-txt{font-size:11px;line-height:1.6;color:var(--dim)}.ai-txt strong{color:var(--text)}
+.strat{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:7px;padding:9px}
+.strat-row{display:flex;gap:7px;margin-bottom:5px}
+.strat-key{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--cyan);min-width:46px}
+.strat-val{font-size:10.5px;color:var(--dim);line-height:1.5}
+.disc{margin-top:9px;padding:6px;border-radius:6px;background:rgba(234,57,67,.05);border:1px solid rgba(234,57,67,.12);font-size:9.5px;color:var(--faint);line-height:1.5}
+.tv-frame{width:100%;height:calc(100vh - 175px);border:none}
+.err-box{padding:16px;text-align:center;color:var(--faint);font-size:11.5px;line-height:1.7}
+.retry{margin-top:7px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--dim);font-size:11px}
+.retry:hover{border-color:var(--bh);color:var(--cyan)}
+@media(max-width:1100px){.right{width:300px}}
+@media(max-width:900px){.right{display:none}}
+</style>
 </head>
 <body>
-    <div id="nexus-root"></div>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useMemo,useCallback} = React;
 
-    <script type="text/babel">
-        /**
-         * NEXUS TERMINAL - PRODUCTION GRADE SOURCE
-         * Architected for High-Performance Asset Tracking
-         */
+// ═══════════════════════════════════════════════════════
+// FREE APIs — NO KEY NEEDED
+// 1. Binance REST+WS  — crypto live prices + OHLCV
+// 2. Yahoo Finance    — stocks OHLCV + fundamentals + news
+// 3. CoinGecko        — crypto fundamentals + global market
+// 4. Alternative.me   — Fear & Greed Index
+// 5. CryptoPanic      — crypto news
+// 6. Stooq.com        — backup OHLCV for Indian stocks
+// 7. allorigins.win   — CORS proxy for Yahoo
+// ═══════════════════════════════════════════════════════
 
-        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+const P1 = u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+const P2 = u => `https://corsproxy.io/?${encodeURIComponent(u)}`;
 
-        // --- GLOBAL CONSTANTS & DATA REGISTRY ---
+async function safeFetch(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r;
+}
 
-        const THEME = {
-            colors: {
-                bg: '#0a0e14',
-                bgDeep: '#060811',
-                panel: 'rgba(18,22,31,0.72)',
-                cyan: '#22d3ee',
-                violet: '#7c6ff0',
-                green: '#16c784',
-                red: '#ea3943',
-                grid: 'rgba(255,255,255,0.04)',
-                crosshair: 'rgba(255,255,255,0.25)'
-            }
-        };
+// ── Yahoo Finance ──────────────────────────────────────
+async function yfetch(path) {
+  const bases = ['https://query1.finance.yahoo.com','https://query2.finance.yahoo.com'];
+  for (const b of bases) {
+    for (const p of [P1, P2]) {
+      try { const r = await safeFetch(p(b+path)); return await r.json(); } catch {}
+    }
+  }
+  throw new Error('Yahoo Finance unavailable');
+}
 
-        const ASSET_REGISTRY = {
-            CRYPTO: [
-                // Large Caps
-                'BTC','ETH','BNB','SOL','XRP','ADA','DOGE','AVAX','DOT','LINK',
-                'MATIC','LTC','TRX','SHIB','ATOM','UNI','ETC','XLM','NEAR','APT',
-                // Mid Caps
-                'OP','ARB','FIL','MANA','SAND','GALA','INJ','SUI','SEI','PEPE',
-                'FLOKI','BONK','WIF','JTO','RNDR','FET','AGIX','OCEAN','GRT','LRC',
-                'IMX','BLUR','ENS','CRV','CVX','BAL','AAVE','COMP','MKR','SNX',
-                // Newer
-                'TON','HBAR','ALGO','VET','EGLD','FTM','THETA','KLAY','ZIL','ONE',
-                'ROSE','CELR','SKL','ANKR','DENT','HOT','SC','XEM','DGB','ZEC',
-                'DASH','XMR','EOS','ICX','ONT','ZRX','BAT','STORJ','AUDIO','BAND',
-                'ICP','STX','FLOW','CELO','CHZ','ENJ','AXS','GMT','LUNC','USTC',
-            ],
-            STOCKS: {
-                'US Tech': ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','NFLX','AMD','INTC','ORCL','CRM','ADBE','QCOM','AVGO','IBM','CSCO','TXN','MU','AMAT','NOW','SNOW','PANW','CRWD','ZS'],
-                'US Finance': ['JPM','BAC','GS','MS','WFC','C','BRK-B','V','MA','AXP','BLK','SCHW','COF','USB','PNC','TFC','ALLY','SQ','PYPL','COIN'],
-                'US Health': ['JNJ','PFE','UNH','ABBV','MRK','LLY','BMY','AMGN','GILD','REGN','VRTX','MRNA','ISRG','DHR','MDT','ELV','CI','CVS','HUM','ZBH'],
-                'US Consumer': ['AMZN','WMT','HD','MCD','SBUX','NKE','DIS','KO','PEP','PM','MO','CL','PG','KHC','GIS','K','CPB','CAG','SYY','HSY'],
-                'US Energy': ['XOM','CVX','COP','SLB','EOG','PXD','MPC','PSX','VLO','OXY','HAL','BKR','DVN','FANG','APA'],
-                'India NSE': ['RELIANCE.NS','TCS.NS','INFY.NS','HDFCBANK.NS','ICICIBANK.NS','HINDUNILVR.NS','BAJFINANCE.NS','SBIN.NS','BHARTIARTL.NS','ITC.NS','WIPRO.NS','AXISBANK.NS','KOTAKBANK.NS','TECHM.NS','LT.NS','MARUTI.NS','ULTRACEMCO.NS','TITAN.NS','NESTLEIND.NS','POWERGRID.NS','HCLTECH.NS','SUNPHARMA.NS','ONGC.NS','NTPC.NS','TATAMOTORS.NS','TATASTEEL.NS','JSWSTEEL.NS','COALINDIA.NS','INDUSINDBK.NS','DRREDDY.NS'],
-                'UK': ['HSBA.L','LLOY.L','BP.L','SHEL.L','GSK.L','AZN.L','ULVR.L','RIO.L','BT-A.L','BARC.L','STAN.L','NWG.L','VOD.L','BATS.L','DGE.L'],
-                'Germany': ['SAP.DE','SIE.DE','BMW.DE','MBG.DE','VOW3.DE','ALV.DE','BAYN.DE','DBK.DE','DTE.DE','RWE.DE','BAS.DE','MUV2.DE'],
-                'Japan': ['7203.T','6758.T','9984.T','8306.T','6501.T','6752.T','7267.T','4063.T','6902.T','8035.T'],
-                'China': ['BABA','JD','PDD','NIO','BIDU','TCEHY','XPEV','LI','YUMC','NTES','VIPS','IQ','TIGR'],
-                'ETFs': ['SPY','QQQ','DIA','IWM','GLD','SLV','USO','VTI','ARKK','XLF','XLK','XLV','XLE','XLP','EEM','EFA','VWO','AGG','TLT','HYG'],
-                'Watchlist': [],
-            }
-        };
+const TF_YF = {
+  '1m':{iv:'1m',rng:'1d'},'5m':{iv:'5m',rng:'5d'},'15m':{iv:'15m',rng:'5d'},
+  '1h':{iv:'60m',rng:'1mo'},'4h':{iv:'1h',rng:'3mo'},
+  '1D':{iv:'1d',rng:'2y'},'1W':{iv:'1wk',rng:'5y'},
+};
 
-        // ─── FREE STOCK & MARKET DATA APIs ───────────────────────────────────
-        // 1. Yahoo Finance v8/v10 (via CORS proxy) — OHLCV + fundamentals
-        // 2. Yahoo Finance RSS  — news headlines
-        // 3. CoinGecko (free, no key) — crypto fundamentals & global market
-        // 4. Binance public REST+WS — crypto OHLCV + live prices
-        // 5. Alternative.me — Fear & Greed index
-        // 6. CryptoPanic (free token) — crypto news
-        // 7. Stooq.com (no key) — backup OHLCV for Indian & global stocks
-        // 8. Open Exchange Rates (free tier) — forex
-        // 9. FMP (Financial Modeling Prep) — free tier stocks & ETFs
+async function yfChart(symbol, tf) {
+  const {iv,rng} = TF_YF[tf]||{iv:'1d',rng:'1y'};
+  const j = await yfetch(`/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${iv}&range=${rng}&includePrePost=false`);
+  const res = j?.chart?.result?.[0];
+  if (!res) throw new Error('No chart data');
+  const ts=res.timestamp||[], q=res.indicators?.quote?.[0]||{};
+  return ts.map((t,i)=>({time:t,open:q.open?.[i],high:q.high?.[i],low:q.low?.[i],close:q.close?.[i],volume:q.volume?.[i]||0}))
+    .filter(d=>d.close!=null&&!isNaN(d.close));
+}
 
-        const PROXIES = {
-            allorigins: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            corsproxy: (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            thingproxy: (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
-        };
+async function yfFund(symbol) {
+  const mods='price,financialData,summaryDetail,defaultKeyStatistics,assetProfile,earnings';
+  const j = await yfetch(`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}`);
+  const r=j?.quoteSummary?.result?.[0];
+  if (!r) throw new Error('No fundamental data');
+  const pr=r.price||{},fd=r.financialData||{},sd=r.summaryDetail||{},ks=r.defaultKeyStatistics||{},ap=r.assetProfile||{};
+  return {
+    name:pr.longName||pr.shortName||symbol, exchange:pr.exchangeName, currency:pr.currency||'USD',
+    marketCap:pr.marketCap?.raw, pe:sd.trailingPE?.raw, forwardPE:sd.forwardPE?.raw,
+    eps:ks.trailingEps?.raw, revenue:fd.totalRevenue?.raw, grossMargin:fd.grossMargins?.raw,
+    profitMargin:fd.profitMargins?.raw, revenueGrowth:fd.revenueGrowth?.raw,
+    earningsGrowth:fd.earningsGrowth?.raw, debtToEquity:fd.debtToEquity?.raw,
+    roe:fd.returnOnEquity?.raw, roa:fd.returnOnAssets?.raw, fcf:fd.freeCashflow?.raw,
+    operCF:fd.operatingCashflow?.raw, dividendYield:sd.dividendYield?.raw,
+    beta:sd.beta?.raw, high52w:sd.fiftyTwoWeekHigh?.raw, low52w:sd.fiftyTwoWeekLow?.raw,
+    ma50:sd.fiftyDayAverage?.raw, ma200:sd.twoHundredDayAverage?.raw,
+    avgVol:sd.averageVolume?.raw, bookValue:ks.bookValue?.raw, priceToBook:ks.priceToBook?.raw,
+    shortRatio:ks.shortRatio?.raw, sharesOut:ks.sharesOutstanding?.raw,
+    sector:ap.sector, industry:ap.industry, employees:ap.fullTimeEmployees,
+    country:ap.country, website:ap.website, description:ap.longBusinessSummary?.slice(0,700),
+    targetMean:fd.targetMeanPrice?.raw, targetHigh:fd.targetHighPrice?.raw,
+    targetLow:fd.targetLowPrice?.raw, recommendation:fd.recommendationKey,
+    numAnalysts:fd.numberOfAnalystOpinions?.raw,
+    buyRatings:fd.numberOfAnalystOpinions?.raw,
+  };
+}
 
-        // Multi-proxy fallback for Yahoo Finance
-        const yahooFetch = async (path) => {
-            const base = `https://query1.finance.yahoo.com${path}`;
-            const base2 = `https://query2.finance.yahoo.com${path}`;
-            const proxies = [
-                PROXIES.allorigins(base),
-                PROXIES.allorigins(base2),
-                PROXIES.corsproxy(base),
-            ];
-            for (const url of proxies) {
-                try {
-                    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-                    if (r.ok) return await r.json();
-                } catch (e) { continue; }
-            }
-            throw new Error('All Yahoo Finance proxies failed');
-        };
+async function yfNews(symbol) {
+  const url=`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&lang=en-US`;
+  for (const p of [P1,P2]) {
+    try {
+      const r = await safeFetch(p(url));
+      const txt = await r.text();
+      const doc = new DOMParser().parseFromString(txt,'text/xml');
+      return Array.from(doc.querySelectorAll('item')).slice(0,18).map(item=>{
+        const title=item.querySelector('title')?.textContent||'';
+        const link=item.querySelector('link')?.textContent||'#';
+        const date=item.querySelector('pubDate')?.textContent||'';
+        const tl=title.toLowerCase();
+        const bull=['surge','rally','beat','breakout','upgrade','buy','growth','record','soar','jump','gain','rise','profit','bull'];
+        const bear=['crash','dump','miss','downgrade','sell','warning','loss','decline','fall','plunge','cut','fear','bear','drop'];
+        const bs=bull.filter(k=>tl.includes(k)).length, ss=bear.filter(k=>tl.includes(k)).length;
+        return {title,link,date,source:'Yahoo Finance',sentiment:bs>ss?'Bullish':ss>bs?'Bearish':'Neutral'};
+      });
+    } catch {}
+  }
+  return [];
+}
 
-        // Yahoo Finance Chart API — returns clean OHLCV array
-        const yahooChart = async (symbol, interval = '1d', range = '6mo') => {
-            // Map our timeframes to Yahoo intervals/ranges
-            const intervalMap = {
-                '1m': { iv: '1m', rng: '1d' },
-                '5m': { iv: '5m', rng: '5d' },
-                '15m': { iv: '15m', rng: '5d' },
-                '1h': { iv: '60m', rng: '1mo' },
-                '4h': { iv: '1h', rng: '3mo' },   // Yahoo has no 4h; use 1h + 3mo
-                '1D': { iv: '1d', rng: '1y' },
-                '1W': { iv: '1wk', rng: '5y' },
-            };
-            const { iv, rng } = intervalMap[interval] || { iv: interval, rng: range };
-            const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${iv}&range=${rng}&includePrePost=false`;
-            const json = await yahooFetch(path);
-            const res = json?.chart?.result?.[0];
-            if (!res) throw new Error('No chart data');
-            const ts = res.timestamp;
-            const q = res.indicators.quote[0];
-            return ts.map((t, i) => ({
-                time: t,
-                open: q.open[i],
-                high: q.high[i],
-                low: q.low[i],
-                close: q.close[i],
-                volume: q.volume[i] || 0,
-            })).filter(d => d.open != null && d.close != null && !isNaN(d.close));
-        };
+async function yfBatch(symbols) {
+  try {
+    const j = await yfetch(`/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}`);
+    const out={};
+    (j?.quoteResponse?.result||[]).forEach(q=>{out[q.symbol]={p:q.regularMarketPrice,c:q.regularMarketChangePercent,chg:q.regularMarketChange};});
+    return out;
+  } catch { return {}; }
+}
 
-        // Yahoo Finance Quote Summary — fundamentals
-        const yahooFundamentals = async (symbol) => {
-            const modules = 'price,financialData,summaryDetail,defaultKeyStatistics,assetProfile,earnings';
-            const path = `/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
-            const json = await yahooFetch(path);
-            const r = json?.quoteSummary?.result?.[0];
-            if (!r) throw new Error('No fundamental data');
-            const pr = r.price || {};
-            const fd = r.financialData || {};
-            const sd = r.summaryDetail || {};
-            const ks = r.defaultKeyStatistics || {};
-            const ap = r.assetProfile || {};
-            return {
-                name: pr.longName || pr.shortName || symbol,
-                symbol: pr.symbol || symbol,
-                exchange: pr.exchangeName,
-                currency: pr.currency || 'USD',
-                price: pr.regularMarketPrice?.raw,
-                change: pr.regularMarketChange?.raw,
-                changePct: pr.regularMarketChangePercent?.raw,
-                marketCap: pr.marketCap?.raw,
-                pe: sd.trailingPE?.raw,
-                forwardPE: sd.forwardPE?.raw,
-                eps: ks.trailingEps?.raw,
-                revenue: fd.totalRevenue?.raw,
-                grossMargin: fd.grossMargins?.raw,
-                profitMargin: fd.profitMargins?.raw,
-                revenueGrowth: fd.revenueGrowth?.raw,
-                earningsGrowth: fd.earningsGrowth?.raw,
-                debtToEquity: fd.debtToEquity?.raw,
-                currentRatio: fd.currentRatio?.raw,
-                roe: fd.returnOnEquity?.raw,
-                roa: fd.returnOnAssets?.raw,
-                freeCashFlow: fd.freeCashflow?.raw,
-                operatingCashFlow: fd.operatingCashflow?.raw,
-                dividendYield: sd.dividendYield?.raw,
-                dividendRate: sd.dividendRate?.raw,
-                beta: sd.beta?.raw,
-                high52w: sd.fiftyTwoWeekHigh?.raw,
-                low52w: sd.fiftyTwoWeekLow?.raw,
-                avg50: sd.fiftyDayAverage?.raw,
-                avg200: sd.twoHundredDayAverage?.raw,
-                avgVolume: sd.averageVolume?.raw,
-                avgVolume10d: sd.averageVolume10days?.raw,
-                sharesOutstanding: ks.sharesOutstanding?.raw,
-                floatShares: ks.floatShares?.raw,
-                shortRatio: ks.shortRatio?.raw,
-                bookValue: ks.bookValue?.raw,
-                priceToBook: ks.priceToBook?.raw,
-                sector: ap.sector,
-                industry: ap.industry,
-                employees: ap.fullTimeEmployees,
-                country: ap.country,
-                website: ap.website,
-                description: ap.longBusinessSummary?.slice(0, 500),
-                // Analyst data
-                targetMean: fd.targetMeanPrice?.raw,
-                targetHigh: fd.targetHighPrice?.raw,
-                targetLow: fd.targetLowPrice?.raw,
-                recommendation: fd.recommendationKey,
-                numAnalysts: fd.numberOfAnalystOpinions?.raw,
-            };
-        };
+// ── Stooq backup ───────────────────────────────────────
+async function stooqChart(symbol, tf) {
+  const iv={1D:'d',1W:'w','1h':'h','4h':'h','15m':'5','5m':'5'}[tf]||'d';
+  const sym=symbol.replace('.NS','.IN').replace('.BO','.IN').toLowerCase();
+  try {
+    const r=await safeFetch(P1(`https://stooq.com/q/d/l/?s=${sym}&i=${iv}`));
+    const txt=await r.text();
+    return txt.trim().split('\n').slice(1).map(ln=>{
+      const [dt,o,h,l,c,v]=ln.split(',');
+      return {time:Math.floor(new Date(dt).getTime()/1000),open:+o,high:+h,low:+l,close:+c,volume:+(v||0)};
+    }).filter(d=>!isNaN(d.time)&&d.close>0);
+  } catch {return [];}
+}
 
-        // Yahoo Finance RSS news
-        const yahooNews = async (symbol) => {
-            const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${symbol}&lang=en-US`;
-            const proxies = [PROXIES.allorigins(url), PROXIES.corsproxy(url)];
-            for (const purl of proxies) {
-                try {
-                    const r = await fetch(purl);
-                    const txt = await r.text();
-                    const doc = new DOMParser().parseFromString(txt, 'text/xml');
-                    const items = Array.from(doc.querySelectorAll('item')).slice(0, 15);
-                    return items.map(i => {
-                        const title = i.querySelector('title')?.textContent || '';
-                        const link = i.querySelector('link')?.textContent || '#';
-                        const pubDate = i.querySelector('pubDate')?.textContent || '';
-                        const desc = i.querySelector('description')?.textContent || '';
-                        const bullish = ['surge', 'rally', 'beat', 'breakout', 'upgrade', 'buy', 'growth', 'record', 'profit', 'gain', 'rise', 'up', 'bull'];
-                        const bearish = ['crash', 'dump', 'miss', 'downgrade', 'sell', 'warning', 'loss', 'decline', 'fall', 'down', 'cut', 'fear', 'bear'];
-                        const tl = title.toLowerCase();
-                        const sentiment = bullish.filter(k => tl.includes(k)).length > bearish.filter(k => tl.includes(k)).length ? 'Bullish' : bearish.some(k => tl.includes(k)) ? 'Bearish' : 'Neutral';
-                        return { title, link, pubDate, desc, sentiment, source: 'Yahoo Finance' };
-                    });
-                } catch (e) { continue; }
-            }
-            return [];
-        };
+// ── Binance ────────────────────────────────────────────
+const BN='https://api.binance.com/api/v3';
+const TF_BN={'1m':'1m','5m':'5m','15m':'15m','1h':'1h','4h':'4h','1D':'1d','1W':'1w'};
 
-        // Stooq.com — free backup for OHLCV (no CORS issues via proxy)
-        const stooqChart = async (symbol, interval = '1d') => {
-            const ivMap = { '1D': 'd', '1W': 'w', '1h': 'h', '4h': 'h' };
-            const iv = ivMap[interval] || 'd';
-            const sym = symbol.replace('.NS', '.IN').replace('.BO', '.IN').toLowerCase();
-            const url = `https://stooq.com/q/d/l/?s=${sym}&i=${iv}`;
-            try {
-                const r = await fetch(PROXIES.allorigins(url));
-                const txt = await r.text();
-                const lines = txt.trim().split('\n').slice(1); // skip header
-                return lines.map(ln => {
-                    const [date, open, high, low, close, volume] = ln.split(',');
-                    const t = new Date(date).getTime() / 1000;
-                    return { time: t, open: +open, high: +high, low: +low, close: +close, volume: +(volume||0) };
-                }).filter(d => !isNaN(d.time) && !isNaN(d.close));
-            } catch (e) { return []; }
-        };
+async function bnChart(symbol,tf) {
+  const r=await safeFetch(`${BN}/klines?symbol=${symbol}&interval=${TF_BN[tf]||'1h'}&limit=1000`);
+  return (await r.json()).map(k=>({time:Math.floor(k[0]/1000),open:+k[1],high:+k[2],low:+k[3],close:+k[4],volume:+k[5]}));
+}
 
-        // CoinGecko — crypto fundamentals (free, no key, rate limited)
-        const cgFetch = async (path) => {
-            const url = `https://api.coingecko.com/api/v3${path}`;
-            const r = await fetch(url);
-            if (!r.ok) throw new Error(`CoinGecko ${r.status}`);
-            return r.json();
-        };
+function bnKlineWS(symbol,tf,cb) {
+  const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${TF_BN[tf]||'1h'}`);
+  ws.onmessage=e=>{const k=JSON.parse(e.data).k;cb({time:Math.floor(k.t/1000),open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v});};
+  return ()=>ws.readyState===WebSocket.OPEN&&ws.close();
+}
 
-        const CG_ID_MAP = {
-            BTC:'bitcoin',ETH:'ethereum',BNB:'binancecoin',SOL:'solana',XRP:'ripple',
-            ADA:'cardano',DOGE:'dogecoin',AVAX:'avalanche-2',DOT:'polkadot',LINK:'chainlink',
-            MATIC:'matic-network',LTC:'litecoin',TRX:'tron',SHIB:'shiba-inu',ATOM:'cosmos',
-            UNI:'uniswap',ETC:'ethereum-classic',XLM:'stellar',NEAR:'near',APT:'aptos',
-            OP:'optimism',ARB:'arbitrum',FIL:'filecoin',MANA:'decentraland',SAND:'the-sandbox',
-            INJ:'injective-protocol',SUI:'sui',PEPE:'pepe',RNDR:'render-token',FET:'fetch-ai',
-            AAVE:'aave',COMP:'compound-governance-token',MKR:'maker',SNX:'havven',
-            CRV:'curve-dao-token',BAL:'balancer',GRT:'the-graph',ENS:'ethereum-name-service',
-            IMX:'immutable-x',BLUR:'blur',LRC:'loopring',OCEAN:'ocean-protocol',
-        };
+function bnTickerWS(cb) {
+  const ws=new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
+  ws.onmessage=e=>{
+    const upd={};
+    JSON.parse(e.data).forEach(d=>{if(d.s.endsWith('USDT'))upd[d.s]={p:+d.c,c:(+d.c-+d.o)/+d.o*100};});
+    cb(upd);
+  };
+  return ()=>ws.readyState===WebSocket.OPEN&&ws.close();
+}
 
-        const cgCoinData = async (base) => {
-            const id = CG_ID_MAP[base] || base.toLowerCase();
-            return cgFetch(`/coins/${id}?localization=false&tickers=false&market_data=true&community_data=true&sparkline=false`);
-        };
+// ── CoinGecko ──────────────────────────────────────────
+const CG='https://api.coingecko.com/api/v3';
+const cgCache=new Map();
+async function cgFetch(path,ttl=60000) {
+  const url=CG+path, hit=cgCache.get(url);
+  if(hit&&Date.now()-hit.t<ttl) return hit.d;
+  const r=await safeFetch(url); const d=await r.json();
+  cgCache.set(url,{d,t:Date.now()}); return d;
+}
+const CG_IDS={BTC:'bitcoin',ETH:'ethereum',BNB:'binancecoin',SOL:'solana',XRP:'ripple',ADA:'cardano',DOGE:'dogecoin',AVAX:'avalanche-2',DOT:'polkadot',LINK:'chainlink',MATIC:'matic-network',LTC:'litecoin',TRX:'tron',SHIB:'shiba-inu',ATOM:'cosmos',UNI:'uniswap',ETC:'ethereum-classic',XLM:'stellar',NEAR:'near',APT:'aptos',OP:'optimism',ARB:'arbitrum',FIL:'filecoin',MANA:'decentraland',SAND:'the-sandbox',INJ:'injective-protocol',SUI:'sui',PEPE:'pepe',RNDR:'render-token',FET:'fetch-ai',AAVE:'aave',MKR:'maker',TON:'the-open-network',HBAR:'hedera-hashgraph',ALGO:'algorand',VET:'vechain',ICP:'internet-computer',FTM:'fantom',AXS:'axie-infinity',CHZ:'chiliz',GRT:'the-graph'};
+async function cgCoin(base) { return cgFetch(`/coins/${CG_IDS[base]||base.toLowerCase()}?localization=false&tickers=false&market_data=true&community_data=true&sparkline=false`,120000); }
+async function cgGlobal() { return cgFetch('/global',120000); }
+async function cgTrending() { return cgFetch('/search/trending',300000); }
 
-        const cgGlobal = async () => cgFetch('/global');
-        const cgTrending = async () => cgFetch('/search/trending');
+// ── Fear & Greed ───────────────────────────────────────
+async function fearGreed() {
+  const r=await safeFetch('https://api.alternative.me/fng/?limit=1');
+  return (await r.json()).data[0];
+}
 
-        // Alternative.me — Fear & Greed index (free, no key)
-        const fearGreed = async () => {
-            const r = await fetch('https://api.alternative.me/fng/?limit=1');
-            const j = await r.json();
-            return j.data[0];
-        };
+// ── CryptoPanic ────────────────────────────────────────
+async function cpNews(base) {
+  const r=await safeFetch(`https://cryptopanic.com/api/v1/posts/?auth_token=b2ac1cc7dc79988a71d7de0bdb7e5d4ab9c6c2e5&currencies=${base}&kind=news&public=true`);
+  return r.json();
+}
 
-        // CryptoPanic — crypto news (free token)
-        const cpNews = async (base) => {
-            const token = 'b2ac1cc7dc79988a71d7de0bdb7e5d4ab9c6c2e5';
-            const r = await fetch(`https://cryptopanic.com/api/v1/posts/?auth_token=${token}&currencies=${base}&kind=news&public=true`);
-            if (!r.ok) throw new Error('CryptoPanic error');
-            return r.json();
-        };
+// ── Smart chart loader ─────────────────────────────────
+async function loadChart(symbol,type,tf) {
+  if(type==='CRYPTO') return bnChart(symbol,tf);
+  try {return await yfChart(symbol,tf);}
+  catch {
+    const d=await stooqChart(symbol,tf);
+    if(d.length) return d;
+    throw new Error('All chart sources failed for '+symbol);
+  }
+}
 
-        // Smart chart data fetcher — tries best source, falls back gracefully
-        const fetchChartData = async (symbol, type, interval) => {
-            if (type === 'CRYPTO') {
-                const binanceInterval = interval.toLowerCase().replace('1d', '1d').replace('1w', '1w').replace('4h', '4h');
-                const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=1000`);
-                const raw = await r.json();
-                return raw.map(d => ({
-                    time: d[0] / 1000, open: +d[1], high: +d[2], low: +d[3], close: +d[4], volume: +d[5]
-                }));
-            } else {
-                // Try Yahoo Finance first, then Stooq as backup
-                try { return await yahooChart(symbol, interval); }
-                catch (e) {
-                    console.warn('Yahoo failed, trying Stooq:', e.message);
-                    const stooq = await stooqChart(symbol, interval);
-                    if (stooq.length > 0) return stooq;
-                    throw new Error('All chart sources failed');
-                }
-            }
-        };
+// ═══════════════════════════════════════════════════════
+// ASSET REGISTRY
+// ═══════════════════════════════════════════════════════
 
-        // Smart stock price fetcher for sidebar list
-        const fetchStockBatch = async (symbols) => {
-            const results = {};
-            // Yahoo Finance batch quote
-            const joined = symbols.join(',');
-            try {
-                const path = `/v7/finance/quote?symbols=${encodeURIComponent(joined)}&fields=symbol,regularMarketPrice,regularMarketChangePercent,regularMarketChange,regularMarketVolume`;
-                const j = await yahooFetch(path);
-                const quotes = j?.quoteResponse?.result || [];
-                quotes.forEach(q => {
-                    results[q.symbol] = {
-                        p: q.regularMarketPrice?.toFixed(2),
-                        c: q.regularMarketChangePercent?.toFixed(2),
-                        chg: q.regularMarketChange?.toFixed(2),
-                        v: q.regularMarketVolume,
-                    };
-                });
-            } catch (e) { console.warn('Stock batch fetch failed:', e); }
-            return results;
-        };
-        
+const CRYPTO_LIST = [
+  {sym:'BTCUSDT',name:'Bitcoin',base:'BTC'},{sym:'ETHUSDT',name:'Ethereum',base:'ETH'},
+  {sym:'BNBUSDT',name:'BNB Chain',base:'BNB'},{sym:'SOLUSDT',name:'Solana',base:'SOL'},
+  {sym:'XRPUSDT',name:'XRP',base:'XRP'},{sym:'ADAUSDT',name:'Cardano',base:'ADA'},
+  {sym:'DOGEUSDT',name:'Dogecoin',base:'DOGE'},{sym:'AVAXUSDT',name:'Avalanche',base:'AVAX'},
+  {sym:'DOTUSDT',name:'Polkadot',base:'DOT'},{sym:'LINKUSDT',name:'Chainlink',base:'LINK'},
+  {sym:'MATICUSDT',name:'Polygon',base:'MATIC'},{sym:'LTCUSDT',name:'Litecoin',base:'LTC'},
+  {sym:'TRXUSDT',name:'TRON',base:'TRX'},{sym:'SHIBUSDT',name:'Shiba Inu',base:'SHIB'},
+  {sym:'ATOMUSDT',name:'Cosmos',base:'ATOM'},{sym:'UNIUSDT',name:'Uniswap',base:'UNI'},
+  {sym:'NEARUSDT',name:'NEAR Protocol',base:'NEAR'},{sym:'APTUSDT',name:'Aptos',base:'APT'},
+  {sym:'OPUSDT',name:'Optimism',base:'OP'},{sym:'ARBUSDT',name:'Arbitrum',base:'ARB'},
+  {sym:'FILUSDT',name:'Filecoin',base:'FIL'},{sym:'INJUSDT',name:'Injective',base:'INJ'},
+  {sym:'SUIUSDT',name:'Sui',base:'SUI'},{sym:'PEPEUSDT',name:'Pepe',base:'PEPE'},
+  {sym:'TONUSDT',name:'Toncoin',base:'TON'},{sym:'RNDRUSDT',name:'Render',base:'RNDR'},
+  {sym:'FETUSDT',name:'Fetch.ai',base:'FET'},{sym:'AAVEUSDT',name:'Aave',base:'AAVE'},
+  {sym:'MKRUSDT',name:'Maker',base:'MKR'},{sym:'GRTUSDT',name:'The Graph',base:'GRT'},
+  {sym:'HBARUSDT',name:'Hedera',base:'HBAR'},{sym:'ALGOUSDT',name:'Algorand',base:'ALGO'},
+  {sym:'VETUSDT',name:'VeChain',base:'VET'},{sym:'ICPUSDT',name:'Internet Computer',base:'ICP'},
+  {sym:'FTMUSDT',name:'Fantom',base:'FTM'},{sym:'AXSUSDT',name:'Axie Infinity',base:'AXS'},
+  {sym:'CHZUSDT',name:'Chiliz',base:'CHZ'},{sym:'XLMUSDT',name:'Stellar',base:'XLM'},
+  {sym:'ETCUSDT',name:'Ethereum Classic',base:'ETC'},{sym:'XMRUSDT',name:'Monero',base:'XMR'},
+  {sym:'WIFUSDT',name:'dogwifhat',base:'WIF'},{sym:'GALAUSDT',name:'Gala',base:'GALA'},
+  {sym:'GMTUSDT',name:'STEPN',base:'GMT'},{sym:'BATUSDT',name:'Basic Attention',base:'BAT'},
+];
 
-        // --- CORE UTILITY ENGINE ---
+const STOCK_CATS = {
+  'Nifty 50': [
+    {s:'^NSEI',n:'NIFTY 50 Index'},{s:'RELIANCE.NS',n:'Reliance Industries'},
+    {s:'TCS.NS',n:'Tata Consultancy'},{s:'HDFCBANK.NS',n:'HDFC Bank'},
+    {s:'INFY.NS',n:'Infosys'},{s:'ICICIBANK.NS',n:'ICICI Bank'},
+    {s:'HINDUNILVR.NS',n:'Hindustan Unilever'},{s:'BAJFINANCE.NS',n:'Bajaj Finance'},
+    {s:'SBIN.NS',n:'State Bank of India'},{s:'BHARTIARTL.NS',n:'Bharti Airtel'},
+    {s:'ITC.NS',n:'ITC Limited'},{s:'WIPRO.NS',n:'Wipro'},
+    {s:'AXISBANK.NS',n:'Axis Bank'},{s:'KOTAKBANK.NS',n:'Kotak Mahindra'},
+    {s:'LT.NS',n:'L&T'},{s:'MARUTI.NS',n:'Maruti Suzuki'},
+    {s:'TATAMOTORS.NS',n:'Tata Motors'},{s:'TATASTEEL.NS',n:'Tata Steel'},
+    {s:'SUNPHARMA.NS',n:'Sun Pharma'},{s:'HCLTECH.NS',n:'HCL Technologies'},
+    {s:'NTPC.NS',n:'NTPC'},{s:'ONGC.NS',n:'ONGC'},
+    {s:'ULTRACEMCO.NS',n:'UltraTech Cement'},{s:'TITAN.NS',n:'Titan Company'},
+    {s:'TECHM.NS',n:'Tech Mahindra'},{s:'NESTLEIND.NS',n:'Nestle India'},
+    {s:'POWERGRID.NS',n:'Power Grid Corp'},{s:'ADANIENT.NS',n:'Adani Enterprises'},
+    {s:'ADANIPORTS.NS',n:'Adani Ports'},{s:'JSWSTEEL.NS',n:'JSW Steel'},
+  ],
+  'BSE/Sensex': [
+    {s:'^BSESN',n:'BSE SENSEX Index'},{s:'BAJAJFINSV.NS',n:'Bajaj Finserv'},
+    {s:'M&M.NS',n:'Mahindra & Mahindra'},{s:'DRREDDY.NS',n:'Dr Reddy Labs'},
+    {s:'ASIANPAINT.NS',n:'Asian Paints'},{s:'DIVISLAB.NS',n:"Divi's Labs"},
+    {s:'CIPLA.NS',n:'Cipla'},{s:'INDUSINDBK.NS',n:'IndusInd Bank'},
+    {s:'COALINDIA.NS',n:'Coal India'},{s:'HEROMOTOCO.NS',n:'Hero MotoCorp'},
+    {s:'BPCL.NS',n:'BPCL'},{s:'EICHERMOT.NS',n:'Eicher Motors'},
+    {s:'TATACONSUM.NS',n:'Tata Consumer'},{s:'APOLLOHOSP.NS',n:'Apollo Hospitals'},
+    {s:'BRITANNIA.NS',n:'Britannia Industries'},
+  ],
+  'US Tech': [
+    {s:'AAPL',n:'Apple'},{s:'MSFT',n:'Microsoft'},{s:'NVDA',n:'NVIDIA'},
+    {s:'GOOGL',n:'Alphabet'},{s:'META',n:'Meta Platforms'},{s:'AMZN',n:'Amazon'},
+    {s:'TSLA',n:'Tesla'},{s:'NFLX',n:'Netflix'},{s:'AMD',n:'AMD'},
+    {s:'INTC',n:'Intel'},{s:'ORCL',n:'Oracle'},{s:'CRM',n:'Salesforce'},
+    {s:'ADBE',n:'Adobe'},{s:'QCOM',n:'Qualcomm'},{s:'AVGO',n:'Broadcom'},
+    {s:'NOW',n:'ServiceNow'},{s:'SNOW',n:'Snowflake'},{s:'PANW',n:'Palo Alto'},
+    {s:'MU',n:'Micron'},{s:'IBM',n:'IBM'},
+  ],
+  'US Finance': [
+    {s:'JPM',n:'JP Morgan'},{s:'BAC',n:'Bank of America'},{s:'GS',n:'Goldman Sachs'},
+    {s:'MS',n:'Morgan Stanley'},{s:'WFC',n:'Wells Fargo'},{s:'V',n:'Visa'},
+    {s:'MA',n:'Mastercard'},{s:'BRK-B',n:'Berkshire Hathaway'},
+    {s:'BLK',n:'BlackRock'},{s:'AXP',n:'American Express'},
+    {s:'SCHW',n:'Charles Schwab'},{s:'C',n:'Citigroup'},
+    {s:'PYPL',n:'PayPal'},{s:'COIN',n:'Coinbase'},
+  ],
+  'US Health': [
+    {s:'JNJ',n:"Johnson & Johnson"},{s:'PFE',n:'Pfizer'},{s:'UNH',n:'UnitedHealth'},
+    {s:'ABBV',n:'AbbVie'},{s:'MRK',n:'Merck'},{s:'LLY',n:'Eli Lilly'},
+    {s:'AMGN',n:'Amgen'},{s:'GILD',n:'Gilead Sciences'},
+    {s:'MRNA',n:'Moderna'},{s:'ISRG',n:'Intuitive Surgical'},
+  ],
+  'UK': [
+    {s:'HSBA.L',n:'HSBC'},{s:'LLOY.L',n:'Lloyds Banking'},{s:'BP.L',n:'BP'},
+    {s:'SHEL.L',n:'Shell'},{s:'GSK.L',n:'GSK'},{s:'AZN.L',n:'AstraZeneca'},
+    {s:'ULVR.L',n:'Unilever'},{s:'RIO.L',n:'Rio Tinto'},{s:'BARC.L',n:'Barclays'},
+  ],
+  'Germany': [
+    {s:'SAP.DE',n:'SAP'},{s:'SIE.DE',n:'Siemens'},{s:'BMW.DE',n:'BMW'},
+    {s:'MBG.DE',n:'Mercedes-Benz'},{s:'VOW3.DE',n:'Volkswagen'},
+    {s:'ALV.DE',n:'Allianz'},{s:'BAYN.DE',n:'Bayer'},
+  ],
+  'Japan': [
+    {s:'7203.T',n:'Toyota'},{s:'6758.T',n:'Sony Group'},{s:'9984.T',n:'SoftBank'},
+    {s:'8306.T',n:'Mitsubishi UFJ'},{s:'7267.T',n:'Honda'},
+  ],
+  'ETFs': [
+    {s:'SPY',n:'S&P 500 ETF'},{s:'QQQ',n:'Nasdaq 100 ETF'},{s:'DIA',n:'Dow Jones ETF'},
+    {s:'IWM',n:'Russell 2000'},{s:'GLD',n:'Gold ETF'},{s:'SLV',n:'Silver ETF'},
+    {s:'VTI',n:'Total Market'},{s:'EEM',n:'Emerging Markets'},{s:'ARKK',n:'ARK Innovation'},
+    {s:'TLT',n:'20Y Treasury ETF'},
+  ],
+};
 
-        const Engine = {
-            formatCurrency: (val, symbol = '$', decimals = 2) => {
-                if (!val) return '--';
-                const n = parseFloat(val);
-                if (n === 0) return symbol + '0.00';
-                const d = n < 1 ? 6 : n < 100 ? 4 : decimals;
-                return symbol + n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
-            },
-            formatCompact: (n) => {
-                if (!n) return '--';
-                const abs = Math.abs(n);
-                if (abs >= 1e12) return (n / 1e12).toFixed(2) + 'T';
-                if (abs >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-                if (abs >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-                if (abs >= 1e3) return (n / 1e3).toFixed(2) + 'K';
-                return n.toFixed(2);
-            },
-            timeAgo: (date) => {
-                const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-                if (seconds < 60) return seconds + 's';
-                if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
-                if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
-                return Math.floor(seconds / 86400) + 'd';
-            }
-        };
+// Index chips in header
+const INDICES = [
+  {key:'^NSEI',   label:'NIFTY',   sym:'^NSEI'},
+  {key:'^BSESN',  label:'SENSEX',  sym:'^BSESN'},
+  {key:'^GSPC',   label:'S&P 500', sym:'^GSPC'},
+  {key:'^DJI',    label:'DOW',     sym:'^DJI'},
+  {key:'^IXIC',   label:'NASDAQ',  sym:'^IXIC'},
+];
 
-        const Indicators = {
-            sma: (data, p) => {
-                const res = [];
-                for(let i=0; i<data.length; i++) {
-                    if(i < p-1) res.push(null);
-                    else res.push(data.slice(i-p+1, i+1).reduce((a,b)=>a+b,0)/p);
-                }
-                return res;
-            },
-            ema: (data, p) => {
-                const k = 2/(p+1);
-                let ema = data[0];
-                const res = [ema];
-                for(let i=1; i<data.length; i++) {
-                    ema = data[i]*k + ema*(1-k);
-                    res.push(ema);
-                }
-                return res;
-            },
-            rsi: (data, p=14) => {
-                let g=0, l=0;
-                for(let i=1; i<=p; i++) {
-                    const d = data[i]-data[i-1];
-                    if(d>=0) g+=d; else l-=d;
-                }
-                let ag = g/p, al = l/p;
-                const res = new Array(p).fill(null);
-                res.push(100 - (100/(1+ag/al)));
-                for(let i=p+1; i<data.length; i++) {
-                    const d = data[i]-data[i-1];
-                    ag = (ag*(p-1)+(d>0?d:0))/p;
-                    al = (al*(p-1)+(d<0?-d:0))/p;
-                    res.push(100 - (100/(1+ag/al)));
-                }
-                return res;
-            },
-            macd: (data, slow=26, fast=12, sig=9) => {
-                const eFast = Indicators.ema(data, fast);
-                const eSlow = Indicators.ema(data, slow);
-                const line = eFast.map((f,i) => f - eSlow[i]);
-                const signal = Indicators.ema(line.slice(slow), sig);
-                const hist = signal.map((s,i) => line[i+slow] - s);
-                return { line, signal, hist };
-            },
-            bollinger: (data, p=20, sd=2) => {
-                const res = [];
-                for(let i=0; i<data.length; i++) {
-                    if(i<p-1) res.push(null);
-                    else {
-                        const slice = data.slice(i-p+1, i+1);
-                        const mean = slice.reduce((a,b)=>a+b,0)/p;
-                        const sdev = Math.sqrt(slice.reduce((a,b)=>a+Math.pow(b-mean,2),0)/p);
-                        res.push({ mid: mean, upper: mean+sd*sdev, lower: mean-sd*sdev });
-                    }
-                }
-                return res;
-            },
-            atr: (ohlcv, p=14) => {
-                const trs = [ohlcv[0].high - ohlcv[0].low];
-                for(let i=1; i<ohlcv.length; i++) {
-                    trs.push(Math.max(ohlcv[i].high-ohlcv[i].low, Math.abs(ohlcv[i].high-ohlcv[i-1].close), Math.abs(ohlcv[i].low-ohlcv[i-1].close)));
-                }
-                let atr = trs.slice(0, p).reduce((a,b)=>a+b,0)/p;
-                const res = new Array(p-1).fill(null);
-                res.push(atr);
-                for(let i=p; i<trs.length; i++) {
-                    atr = (atr*(p-1)+trs[i])/p;
-                    res.push(atr);
-                }
-                return res;
-            }
-        };
+// ═══════════════════════════════════════════════════════
+// TECHNICAL INDICATORS
+// ═══════════════════════════════════════════════════════
+const I = {
+  sma:(a,p)=>a.map((_,i)=>i<p-1?null:a.slice(i-p+1,i+1).reduce((x,y)=>x+y,0)/p),
+  ema(a,p){
+    const k=2/(p+1),out=[];
+    for(let i=0;i<a.length;i++) out.push(i===0?a[0]:a[i]*k+out[i-1]*(1-k));
+    return out;
+  },
+  rsi(a,p=14){
+    const d=a.map((_,i)=>i===0?0:a[i]-a[i-1]);
+    let ag=0,al=0;
+    for(let i=1;i<=p;i++){ag+=Math.max(d[i],0)/p;al+=Math.max(-d[i],0)/p;}
+    const out=Array(p).fill(null);
+    out.push(al===0?100:100-100/(1+ag/al));
+    for(let i=p+1;i<a.length;i++){
+      ag=(ag*(p-1)+Math.max(d[i],0))/p;
+      al=(al*(p-1)+Math.max(-d[i],0))/p;
+      out.push(al===0?100:100-100/(1+ag/al));
+    }
+    return out;
+  },
+  macd(a,fast=12,slow=26,sig=9){
+    const ef=I.ema(a,fast),es=I.ema(a,slow);
+    const line=ef.map((v,i)=>v-es[i]);
+    const signal=I.ema(line,sig);
+    return {line,signal,hist:line.map((v,i)=>v-signal[i])};
+  },
+  bb(a,p=20,m=2){
+    const sma=I.sma(a,p);
+    return sma.map((mid,i)=>{
+      if(mid===null) return {upper:null,mid:null,lower:null,pct:null};
+      const sl=a.slice(i-p+1,i+1);
+      const sd=Math.sqrt(sl.reduce((acc,v)=>acc+(v-mid)**2,0)/p);
+      const upper=mid+m*sd,lower=mid-m*sd;
+      const pct=upper===lower?50:(a[i]-lower)/(upper-lower)*100;
+      return {upper,mid,lower,pct};
+    });
+  },
+  atr(c,p=14){
+    const tr=c.map((x,i)=>i===0?x.high-x.low:Math.max(x.high-x.low,Math.abs(x.high-c[i-1].close),Math.abs(x.low-c[i-1].close)));
+    return I.ema(tr,p);
+  },
+  stoch(c,k=14,d=3){
+    const ks=c.map((_,i)=>{
+      if(i<k-1) return null;
+      const sl=c.slice(i-k+1,i+1);
+      const lo=Math.min(...sl.map(x=>x.low)),hi=Math.max(...sl.map(x=>x.high));
+      return hi===lo?50:(c[i].close-lo)/(hi-lo)*100;
+    });
+    return {k:ks,d:I.sma(ks.filter(v=>v!==null),d)};
+  },
+  adx(c,p=14){
+    if(c.length<p*2) return null;
+    const pDM=[],mDM=[],TR=[];
+    for(let i=1;i<c.length;i++){
+      pDM.push(Math.max(c[i].high-c[i-1].high,0));
+      mDM.push(Math.max(c[i-1].low-c[i].low,0));
+      TR.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close)));
+    }
+    const atr=I.ema(TR,p),aPDM=I.ema(pDM,p),aMDM=I.ema(mDM,p);
+    const pDI=aPDM.map((v,i)=>atr[i]>0?v/atr[i]*100:0);
+    const mDI=aMDM.map((v,i)=>atr[i]>0?v/atr[i]*100:0);
+    const DX=pDI.map((v,i)=>{const s=v+mDI[i];return s>0?Math.abs(v-mDI[i])/s*100:0;});
+    const adxArr=I.ema(DX,p);
+    const n=adxArr.length-1;
+    return {adx:adxArr[n],pdi:pDI[n],mdi:mDI[n]};
+  },
+  williams(c,p=14){
+    return c.map((_,i)=>{
+      if(i<p-1) return null;
+      const sl=c.slice(i-p+1,i+1);
+      const hi=Math.max(...sl.map(x=>x.high)),lo=Math.min(...sl.map(x=>x.low));
+      return hi===lo?-50:(hi-c[i].close)/(hi-lo)*-100;
+    });
+  },
+  cci(c,p=20){
+    return c.map((_,i)=>{
+      if(i<p-1) return null;
+      const sl=c.slice(i-p+1,i+1);
+      const tps=sl.map(x=>(x.high+x.low+x.close)/3);
+      const meanTP=tps.reduce((a,b)=>a+b,0)/p;
+      const meanDev=tps.reduce((a,b)=>a+Math.abs(b-meanTP),0)/p;
+      return meanDev===0?0:(tps[tps.length-1]-meanTP)/(0.015*meanDev);
+    });
+  },
+  vwap(c){
+    let cumVol=0,cumTpV=0;
+    return c.map(x=>{
+      const tp=(x.high+x.low+x.close)/3;
+      cumVol+=x.volume; cumTpV+=tp*x.volume;
+      return cumVol>0?cumTpV/cumVol:tp;
+    });
+  },
+  sr(c,n=4){
+    if(c.length<20) return {resistance:[],support:[]};
+    const recent=c.slice(-100);
+    const highs=[],lows=[];
+    for(let i=3;i<recent.length-3;i++){
+      const x=recent[i];
+      if(x.high>recent[i-1].high&&x.high>recent[i-2].high&&x.high>recent[i-3].high&&x.high>recent[i+1].high&&x.high>recent[i+2].high&&x.high>recent[i+3].high) highs.push(x.high);
+      if(x.low<recent[i-1].low&&x.low<recent[i-2].low&&x.low<recent[i-3].low&&x.low<recent[i+1].low&&x.low<recent[i+2].low&&x.low<recent[i+3].low) lows.push(x.low);
+    }
+    const last=recent[recent.length-1].close;
+    const resistance=[...new Set(highs)].filter(v=>v>last).sort((a,b)=>a-b).slice(0,n);
+    const support=[...new Set(lows)].filter(v=>v<last).sort((a,b)=>b-a).slice(0,n);
+    return {resistance,support};
+  },
+  patterns(c){
+    const res=[]; const n=c.length;
+    for(let i=Math.max(2,n-6);i<n;i++){
+      const x=c[i],p1=c[i-1],p2=c[i-2];
+      const body=Math.abs(x.close-x.open),rng=x.high-x.low;
+      const bull=x.close>x.open,prevBull=p1.close>p1.open;
+      const uw=x.high-Math.max(x.open,x.close),lw=Math.min(x.open,x.close)-x.low;
+      const avgBody=c.slice(Math.max(0,i-14),i).reduce((a,cc)=>a+Math.abs(cc.close-cc.open),0)/14||body;
+      if(body<rng*0.05&&rng>0){
+        if(uw>lw*2) res.push({name:'Gravestone Doji',type:'Bearish'});
+        else if(lw>uw*2) res.push({name:'Dragonfly Doji',type:'Bullish'});
+        else res.push({name:'Doji',type:'Neutral'});
+        continue;
+      }
+      if(lw>=body*2&&uw<=body*0.3&&!bull) res.push({name:'Hammer',type:'Bullish'});
+      else if(uw>=body*2&&lw<=body*0.3&&bull) res.push({name:'Shooting Star',type:'Bearish'});
+      else if(uw>=body*2&&lw<=body*0.3&&!bull) res.push({name:'Inverted Hammer',type:'Bullish'});
+      else if(lw>=body*2&&uw<=body*0.3&&bull) res.push({name:'Hanging Man',type:'Bearish'});
+      if(bull&&!prevBull&&x.open<=p1.close&&x.close>=p1.open&&body>Math.abs(p1.close-p1.open)) res.push({name:'Bullish Engulfing',type:'Bullish'});
+      else if(!bull&&prevBull&&x.open>=p1.close&&x.close<=p1.open&&body>Math.abs(p1.close-p1.open)) res.push({name:'Bearish Engulfing',type:'Bearish'});
+      if(bull&&uw<=body*0.05&&lw<=body*0.05&&body>=avgBody*1.5) res.push({name:'Bullish Marubozu',type:'Bullish'});
+      else if(!bull&&uw<=body*0.05&&lw<=body*0.05&&body>=avgBody*1.5) res.push({name:'Bearish Marubozu',type:'Bearish'});
+      if(i>=2){
+        const p2b=p2.close>p2.open,p2body=Math.abs(p2.close-p2.open);
+        if(!p2b&&p2body>0.8*avgBody&&Math.abs(p1.close-p1.open)<p2body*0.3&&bull&&x.close>(p2.open+p2.close)/2) res.push({name:'Morning Star',type:'Bullish'});
+        if(p2b&&p2body>0.8*avgBody&&Math.abs(p1.close-p1.open)<p2body*0.3&&!bull&&x.close<(p2.open+p2.close)/2) res.push({name:'Evening Star',type:'Bearish'});
+        if(bull&&prevBull&&p2.close>p2.open&&x.close>p1.close&&p1.close>p2.close&&body>avgBody*.7&&Math.abs(p1.close-p1.open)>avgBody*.7) res.push({name:'Three White Soldiers',type:'Bullish'});
+        if(!bull&&!prevBull&&!(p2.close>p2.open)&&x.close<p1.close&&p1.close<p2.close&&body>avgBody*.7) res.push({name:'Three Black Crows',type:'Bearish'});
+      }
+    }
+    return res.slice(-5);
+  }
+};
 
-        const PatternEngine = {
-            scan: (ohlcv) => {
-                if (!ohlcv || ohlcv.length < 10) return [];
-                const res = [];
-                const c = ohlcv[ohlcv.length - 1];
-                const p = ohlcv[ohlcv.length - 2];
-                const pp = ohlcv[ohlcv.length - 3];
-                
-                const body = Math.abs(c.close - c.open);
-                const range = c.high - c.low;
-                const upperWick = c.high - Math.max(c.close, c.open);
-                const lowerWick = Math.min(c.close, c.open) - c.low;
+// ═══════════════════════════════════════════════════════
+// FORMAT HELPERS
+// ═══════════════════════════════════════════════════════
+const F = {
+  price(v,sym='$'){
+    if(v==null||isNaN(v)) return '--';
+    const n=+v,a=Math.abs(n);
+    const d=a<1?6:a<10?4:a<1000?2:2;
+    return sym+n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+  },
+  compact(n){
+    if(n==null||isNaN(n)) return '--';
+    const a=Math.abs(n),pfx=n<0?'-':'';
+    if(a>=1e12) return pfx+'$'+(a/1e12).toFixed(2)+'T';
+    if(a>=1e9)  return pfx+'$'+(a/1e9).toFixed(2)+'B';
+    if(a>=1e6)  return pfx+'$'+(a/1e6).toFixed(2)+'M';
+    if(a>=1e3)  return pfx+'$'+(a/1e3).toFixed(2)+'K';
+    return pfx+'$'+a.toFixed(2);
+  },
+  pct(n,d=1){ if(n==null||isNaN(n)) return '--'; return (n*100).toFixed(d)+'%'; },
+  num(n,d=2){ if(n==null||isNaN(n)) return '--'; return (+n).toFixed(d); },
+  ago(s){
+    const sec=Math.floor((Date.now()-new Date(s))/1000);
+    if(sec<60) return sec+'s';
+    if(sec<3600) return Math.floor(sec/60)+'m';
+    if(sec<86400) return Math.floor(sec/3600)+'h';
+    return Math.floor(sec/86400)+'d';
+  }
+};
 
-                // Candle logic
-                if (body < range * 0.1) res.push({ name: 'Doji', type: 'Neutral' });
-                if (lowerWick > body * 2 && upperWick < body * 0.5) res.push({ name: 'Hammer', type: 'Bullish' });
-                if (upperWick > body * 2 && lowerWick < body * 0.5) res.push({ name: 'Shooting Star', type: 'Bearish' });
-                if (c.close > c.open && p.close < p.open && c.close > p.open && c.open < p.close) res.push({ name: 'Bullish Engulfing', type: 'Bullish' });
-                
-                // Simplified S/R
-                const recentHighs = ohlcv.slice(-20).map(d => d.high);
-                const recentLows = ohlcv.slice(-20).map(d => d.low);
-                if (c.close > Math.max(...recentHighs.slice(0, -1))) res.push({ name: 'Local Breakout', type: 'Bullish' });
-                if (c.close < Math.min(...recentLows.slice(0, -1))) res.push({ name: 'Local Breakdown', type: 'Bearish' });
+// ═══════════════════════════════════════════════════════
+// COIN / STOCK LOGO
+// ═══════════════════════════════════════════════════════
+function CoinLogo({base,size=23}) {
+  const [err,setErr]=useState(false);
+  const src=`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${base.toLowerCase()}.png`;
+  if(err) return <div className="aico-fb" style={{width:size,height:size}}>{base.slice(0,3)}</div>;
+  return <img className="aico" src={src} width={size} height={size} onError={()=>setErr(true)} style={{width:size,height:size,flexShrink:0}} />;
+}
+function StockIcon({sym}) {
+  const s=sym.replace(/\.(NS|BO|L|DE|T)$/,'').slice(0,4);
+  return <div className="sico-fb">{s}</div>;
+}
 
-                return res;
-            }
-        };
+// ═══════════════════════════════════════════════════════
+// LEFT SIDEBAR
+// ═══════════════════════════════════════════════════════
+function LeftBar({mode,setMode,active,onSelect,cpx}) {
+  const [cat,setCat]=useState('Nifty 50');
+  const [q,setQ]=useState('');
+  const [spx,setSpx]=useState({});
+  const [ldg,setLdg]=useState(false);
 
-        // --- UI COMPONENTS ---
+  useEffect(()=>{
+    if(mode!=='STOCKS') return;
+    const syms=(STOCK_CATS[cat]||[]).map(x=>x.s);
+    setLdg(true);
+    yfBatch(syms).then(r=>{setSpx(prev=>({...prev,...r}));setLdg(false);}).catch(()=>setLdg(false));
+    const iv=setInterval(()=>yfBatch(syms).then(r=>setSpx(prev=>({...prev,...r}))).catch(()=>{}),20000);
+    return ()=>clearInterval(iv);
+  },[mode,cat]);
 
-        const Header = ({ symbol, asset, prices, clock }) => {
-            const data = prices[symbol] || { p: '0', c: '0', h: '0', l: '0', v: '0' };
-            const isUp = parseFloat(data.c) >= 0;
+  const fCrypto=useMemo(()=>{
+    if(!q) return CRYPTO_LIST;
+    const qL=q.toLowerCase();
+    return CRYPTO_LIST.filter(c=>c.base.toLowerCase().includes(qL)||c.name.toLowerCase().includes(qL));
+  },[q]);
 
-            return (
-                <header className="glass flex items-center justify-between px-6 z-[100] border-b border-white/5">
-                    <div className="flex items-center gap-10">
-                        <div className="flex items-center gap-4 group cursor-pointer">
-                            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-cyan-500 rounded-xl flex items-center justify-center text-white shadow-xl shadow-cyan-500/10 group-hover:scale-110 transition-transform">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="font-display font-bold text-xl leading-none tracking-tight">NEXUS<span className="text-cyan-400">.</span></span>
-                                <span className="text-[10px] text-cyan-400 font-bold tracking-[0.3em] uppercase opacity-70">Intelligence</span>
-                            </div>
-                        </div>
+  const fStocks=useMemo(()=>{
+    if(!q) return STOCK_CATS[cat]||[];
+    const qL=q.toLowerCase();
+    return Object.values(STOCK_CATS).flat().filter(x=>x.s.toLowerCase().includes(qL)||x.n.toLowerCase().includes(qL));
+  },[q,cat]);
 
-                        <div className="h-10 w-px bg-white/10"></div>
-
-                        <div className="flex items-center gap-6">
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-2xl font-display font-bold">{symbol.replace('USDT', '')}</span>
-                                    <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded-md text-slate-500 font-bold uppercase border border-white/5">{asset.type}</span>
-                                </div>
-                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider truncate max-w-[150px]">{asset.name || symbol}</span>
-                            </div>
-                            <div className="flex flex-col items-end min-w-[120px]">
-                                <span className={`text-2xl font-mono font-bold leading-none tracking-tighter ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                                    {Engine.formatCurrency(data.p, '', asset.type === 'CRYPTO' ? 4 : 2)}
-                                </span>
-                                <div className={`flex items-center gap-1.5 font-mono text-xs font-bold ${isUp ? 'text-green-500' : 'text-red-500'}`}>
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d={isUp ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"}/></svg>
-                                    {isUp ? '+' : ''}{data.c}%
-                                </div>
-                            </div>
-                        </div>
+  return (
+    <div className="left">
+      <div className="mode-bar">
+        <button className={`mbt${mode==='CRYPTO'?' on':''}`} onClick={()=>setMode('CRYPTO')}>🪙 Crypto</button>
+        <button className={`mbt${mode==='STOCKS'?' on':''}`} onClick={()=>setMode('STOCKS')}>📈 Stocks</button>
+      </div>
+      {mode==='STOCKS'&&!q&&(
+        <div className="cat-scroll">
+          {Object.keys(STOCK_CATS).map(c=>(
+            <button key={c} className={`cbt${cat===c?' on':''}`} onClick={()=>setCat(c)}>{c}</button>
+          ))}
+        </div>
+      )}
+      <div className="srch">
+        <span className="srch-ico">🔍</span>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder={`Search ${mode==='CRYPTO'?'crypto':'stocks & indices'}…`} />
+        {q&&<button className="srch-x" onClick={()=>setQ('')}>×</button>}
+      </div>
+      <div className="aset-list">
+        {mode==='CRYPTO'?(
+          fCrypto.length===0
+            ?<div style={{padding:'14px',textAlign:'center',color:'var(--faint)',fontSize:11}}>No results for "{q}"</div>
+            :fCrypto.map(c=>{
+              const px=cpx[c.sym]; const price=px?F.price(px.p):'…'; const chg=px?+px.c:null;
+              return (
+                <button key={c.sym} className={`arow${active===c.sym?' on':''}`} onClick={()=>onSelect(c.sym,'CRYPTO',c.name,c.base)}>
+                  <CoinLogo base={c.base}/>
+                  <div className="ainfo"><div className="asym">{c.base} <span style={{fontSize:9,color:'var(--faint)'}}>USDT</span></div><div className="aname">{c.name}</div></div>
+                  <div className="apx"><div className="aprice">{price}</div>{chg!=null&&<div className={`achg ${chg>=0?'up':'dn'}`}>{chg>=0?'+':''}{chg.toFixed(2)}%</div>}</div>
+                </button>
+              );
+            })
+        ):(
+          ldg&&!Object.keys(spx).length
+            ?[1,2,3,4,5,6,7].map(i=><div key={i} className="skel" style={{height:38,margin:'2px 0'}}/>)
+            :fStocks.length===0
+              ?<div style={{padding:'14px',textAlign:'center',color:'var(--faint)',fontSize:11}}>No results</div>
+              :fStocks.map(st=>{
+                const px=spx[st.s]; const price=px?F.price(px.p,''):'…'; const chg=px?+px.c:null;
+                const isIndex=st.s.startsWith('^');
+                return (
+                  <button key={st.s} className={`arow${active===st.s?' on':''}`} onClick={()=>onSelect(st.s,'STOCK',st.n,st.s.replace(/\.(NS|BO|L|DE|T)$/,'').replace('^',''))}>
+                    <StockIcon sym={st.s}/>
+                    <div className="ainfo">
+                      <div className="asym" style={isIndex?{color:'var(--cyan)'}:{}}>{st.s.replace(/\.(NS|BO|L|DE|T)$/,'')}{isIndex&&' ★'}</div>
+                      <div className="aname">{st.n}</div>
                     </div>
+                    <div className="apx"><div className="aprice">{price}</div>{chg!=null&&<div className={`achg ${chg>=0?'up':'dn'}`}>{chg>=0?'+':''}{chg.toFixed(2)}%</div>}</div>
+                  </button>
+                );
+              })
+        )}
+      </div>
+    </div>
+  );
+}
 
-                    <div className="hidden 2xl:flex items-center gap-12">
-                        <MetricBlock label="24h High" value={Engine.formatCurrency(data.h, '', 2)} />
-                        <MetricBlock label="24h Low" value={Engine.formatCurrency(data.l, '', 2)} />
-                        <MetricBlock label="24h Volume" value={Engine.formatCompact(data.v)} />
-                    </div>
+// ═══════════════════════════════════════════════════════
+// CHART PANEL
+// ═══════════════════════════════════════════════════════
+const TFS=['1m','5m','15m','1h','4h','1D','1W'];
 
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
-                            <div className="pulse-live"></div>
-                            <span className="text-[11px] font-bold text-green-400 tracking-widest">LIVE</span>
-                            <div className="w-px h-3 bg-white/10"></div>
-                            <span className="font-mono text-xs text-slate-400 font-bold">{clock}</span>
-                        </div>
-                    </div>
-                </header>
-            );
-        };
+function ChartPanel({symbol,type,tf,setTf,onData,showVol,setShowVol,showEMA,setShowEMA,showBB,setShowBB}) {
+  const wrapRef=useRef(null);
+  const chartRef=useRef(null);
+  const csRef=useRef(null);
+  const volRef=useRef(null);
+  const e20Ref=useRef(null);
+  const e50Ref=useRef(null);
+  const bbURef=useRef(null);
+  const bbLRef=useRef(null);
+  const bbMRef=useRef(null);
+  const wsRef=useRef(null);
+  const [ldg,setLdg]=useState(true);
+  const [err,setErr]=useState(null);
 
-        const MetricBlock = ({ label, value }) => (
-            <div className="flex flex-col items-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1">{label}</span>
-                <span className="text-sm font-mono font-bold text-slate-200">{value}</span>
+  useEffect(()=>{
+    if(!wrapRef.current) return;
+    const chart=LightweightCharts.createChart(wrapRef.current,{
+      width:wrapRef.current.clientWidth, height:wrapRef.current.clientHeight,
+      layout:{background:{type:'Solid',color:'#0a0e14'},textColor:'#545c6e'},
+      grid:{vertLines:{color:'rgba(255,255,255,0.035)'},horzLines:{color:'rgba(255,255,255,0.035)'}},
+      crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'rgba(255,255,255,0.18)',labelBackgroundColor:'#1a2235'},horzLine:{color:'rgba(255,255,255,0.18)',labelBackgroundColor:'#1a2235'}},
+      rightPriceScale:{borderColor:'rgba(255,255,255,0.05)',textColor:'#545c6e'},
+      timeScale:{borderColor:'rgba(255,255,255,0.05)',timeVisible:true,secondsVisible:false,barSpacing:9},
+    });
+    const cs=chart.addCandlestickSeries({upColor:'#16c784',downColor:'#ea3943',borderUpColor:'#16c784',borderDownColor:'#ea3943',wickUpColor:'#16c784',wickDownColor:'#ea3943'});
+    const vol=chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'vol'});
+    chart.priceScale('vol').applyOptions({scaleMargins:{top:0.85,bottom:0}});
+    const e20=chart.addLineSeries({color:'rgba(34,211,238,0.7)',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+    const e50=chart.addLineSeries({color:'rgba(124,111,240,0.7)',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+    const bbU=chart.addLineSeries({color:'rgba(245,158,11,0.5)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,lineStyle:2});
+    const bbL=chart.addLineSeries({color:'rgba(245,158,11,0.5)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,lineStyle:2});
+    const bbM=chart.addLineSeries({color:'rgba(245,158,11,0.3)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,lineStyle:1});
+    const resize=()=>{if(wrapRef.current) chart.applyOptions({width:wrapRef.current.clientWidth,height:wrapRef.current.clientHeight});};
+    window.addEventListener('resize',resize);
+    chartRef.current=chart; csRef.current=cs; volRef.current=vol;
+    e20Ref.current=e20; e50Ref.current=e50;
+    bbURef.current=bbU; bbLRef.current=bbL; bbMRef.current=bbM;
+    return ()=>{window.removeEventListener('resize',resize);chart.remove();};
+  },[]);
+
+  useEffect(()=>{
+    if(!csRef.current) return;
+    setLdg(true); setErr(null);
+    if(wsRef.current){wsRef.current();wsRef.current=null;}
+    loadChart(symbol,type,tf).then(data=>{
+      if(!data.length){setErr('No data available');setLdg(false);return;}
+      csRef.current.setData(data);
+      // Volume
+      const vd=data.map(d=>({time:d.time,value:d.volume,color:d.close>=d.open?'rgba(22,199,132,0.35)':'rgba(234,57,67,0.35)'}));
+      volRef.current.setData(showVol?vd:[]);
+      // EMAs
+      const cls=data.map(d=>d.close);
+      const e20d=I.ema(cls,20).map((v,i)=>({time:data[i].time,value:v}));
+      const e50d=I.ema(cls,50).map((v,i)=>({time:data[i].time,value:v}));
+      e20Ref.current.setData(showEMA?e20d:[]);
+      e50Ref.current.setData(showEMA?e50d:[]);
+      // BB
+      const bbd=I.bb(cls,20,2);
+      const bbu=bbd.map((b,i)=>b.upper!=null?{time:data[i].time,value:b.upper}:null).filter(Boolean);
+      const bbl=bbd.map((b,i)=>b.lower!=null?{time:data[i].time,value:b.lower}:null).filter(Boolean);
+      const bbm=bbd.map((b,i)=>b.mid!=null?{time:data[i].time,value:b.mid}:null).filter(Boolean);
+      bbURef.current.setData(showBB?bbu:[]);
+      bbLRef.current.setData(showBB?bbl:[]);
+      bbMRef.current.setData(showBB?bbm:[]);
+      chartRef.current.timeScale().fitContent();
+      onData(data); setLdg(false);
+      if(type==='CRYPTO') wsRef.current=bnKlineWS(symbol,tf,upd=>{
+        csRef.current.update(upd);
+        volRef.current.update({time:upd.time,value:upd.volume,color:upd.close>=upd.open?'rgba(22,199,132,0.35)':'rgba(234,57,67,0.35)'});
+      });
+    }).catch(e=>{setErr(e.message);setLdg(false);});
+    return ()=>{if(wsRef.current){wsRef.current();wsRef.current=null;}};
+  },[symbol,type,tf]);
+
+  return (
+    <div className="ctr">
+      <div className="chart-bar">
+        <div className="tfs">{TFS.map(t=><button key={t} className={`tfb${tf===t?' on':''}`} onClick={()=>setTf(t)}>{t}</button>)}</div>
+        <div className="itogs">
+          <button className={`itog${showVol?' on':''}`} onClick={()=>setShowVol(v=>!v)}>VOL</button>
+          <button className={`itog${showEMA?' on':''}`} onClick={()=>setShowEMA(v=>!v)}>EMA</button>
+          <button className={`itog${showBB?' on':''}`} onClick={()=>setShowBB(v=>!v)}>BB</button>
+        </div>
+      </div>
+      {ldg&&<div className="chart-load"/>}
+      {err&&!ldg&&<div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',color:'var(--faint)',fontSize:12,zIndex:5}}>⚠️ {err}</div>}
+      <div className="chart-wrap" ref={wrapRef}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// TECHNICAL ANALYSIS TAB
+// ═══════════════════════════════════════════════════════
+function TechTab({ohlcv}) {
+  const A=useMemo(()=>{
+    if(!ohlcv||ohlcv.length<50) return null;
+    const cls=ohlcv.map(d=>d.close), n=ohlcv.length, last=ohlcv[n-1], p=last.close;
+    const rsiA=I.rsi(cls,14), rsi=rsiA[n-1];
+    const macd=I.macd(cls); const mv=macd.line[n-1],sv=macd.signal[n-1],hv=macd.hist[n-1];
+    const e9=I.ema(cls,9)[n-1], e20=I.ema(cls,20)[n-1], e50=I.ema(cls,50)[n-1];
+    const e100=I.ema(cls,100)[n-1], e200=I.ema(cls,200)[n-1];
+    const bbA=I.bb(cls,20,2), bb=bbA[n-1];
+    const atrA=I.atr(ohlcv,14), atr=atrA[n-1];
+    const stA=I.stoch(ohlcv,14,3), stk=stA.k[n-1];
+    const adx=I.adx(ohlcv,14);
+    const wA=I.williams(ohlcv,14), wr=wA[n-1];
+    const cciA=I.cci(ohlcv,20), cci=cciA[n-1];
+    const vwapA=I.vwap(ohlcv), vwap=vwapA[n-1];
+    const sr=I.sr(ohlcv,5), pats=I.patterns(ohlcv);
+    // Volume
+    const vs=ohlcv.slice(-21).map(d=>d.volume);
+    const avgVol=vs.slice(0,-1).reduce((a,b)=>a+b,0)/20;
+    const volRatio=last.volume/avgVol;
+    // OBV
+    let obv=0;
+    const obvArr=ohlcv.map((c,i)=>{if(i===0){obv=c.volume;return obv;}obv+=c.close>ohlcv[i-1].close?c.volume:c.close<ohlcv[i-1].close?-c.volume:0;return obv;});
+    const obvTrend=obvArr[n-1]>obvArr[n-5]?'Rising':'Falling';
+    // Pivot Points (Classic)
+    const prevDay=ohlcv[n-2]||ohlcv[n-1];
+    const pivot=(prevDay.high+prevDay.low+prevDay.close)/3;
+    const r1=2*pivot-prevDay.low, s1=2*pivot-prevDay.high;
+    const r2=pivot+(prevDay.high-prevDay.low), s2=pivot-(prevDay.high-prevDay.low);
+    const r3=prevDay.high+2*(pivot-prevDay.low), s3=prevDay.low-2*(prevDay.high-pivot);
+    // Signal scoring
+    const sigs=[];
+    const add=(score)=>sigs.push(score);
+    add(rsi<30?2:rsi<40?1:rsi>70?-2:rsi>60?-1:0);
+    add(hv>0&&mv>sv?2:hv>0?1:hv<0&&mv<sv?-2:-1);
+    add(p>e20&&e20>e50?2:p>e20?1:p<e20&&e20<e50?-2:-1);
+    add(e50>e200?1:-1);
+    add(stk<20?2:stk>80?-2:0);
+    add(bb&&p<=bb.lower*1.01?2:bb&&p>=bb.upper*0.99?-2:0);
+    add(wr&&wr<-80?2:wr&&wr>-20?-2:0);
+    add(cci&&cci<-100?2:cci&&cci>100?-2:0);
+    const avg=sigs.reduce((a,b)=>a+b,0)/sigs.length;
+    let overall,oc; if(avg>=1.5){overall='STRONG BUY';oc='buy';}else if(avg>=0.5){overall='BUY';oc='buy';}else if(avg<=-1.5){overall='STRONG SELL';oc='sell';}else if(avg<=-0.5){overall='SELL';oc='sell';}else{overall='NEUTRAL';oc='neutral';}
+    return {rsi,mv,sv,hv,e9,e20,e50,e100,e200,bb,atr,stk,adx,wr,cci,vwap,sr,pats,overall,oc,avg,volRatio,obvTrend,pivot,r1,r2,r3,s1,s2,s3,p,last};
+  },[ohlcv]);
+
+  if(!A) return <div className="err-box"><div className="spin" style={{margin:'0 auto 8px'}}/><p>Computing indicators…</p></div>;
+  const {rsi,mv,sv,hv,e9,e20,e50,e100,e200,bb,atr,stk,adx,wr,cci,vwap,sr,pats,overall,oc,avg,volRatio,obvTrend,pivot,r1,r2,r3,s1,s2,s3,p} = A;
+  const sigClass=(v,buy,sb,sell,ss)=>v<=sb?'sb':v<=buy?'b':v>=ss?'ss':v>=sell?'s':'n';
+  const pf=v=>F.price(v,'');
+
+  return (
+    <div>
+      <div className={`overall ${oc}`}>
+        <div className="overall-lbl">Overall Signal</div>
+        <div className="overall-val" style={{color:oc==='buy'?'var(--green)':oc==='sell'?'var(--red)':'var(--dim)'}}>{overall}</div>
+        <div style={{fontSize:9,color:'var(--faint)',marginTop:2}}>Score: {avg.toFixed(2)} | {sigs?.length||8} indicators</div>
+      </div>
+
+      <div className="sec-hd">Momentum Oscillators</div>
+      <div className="ind-row">
+        <span className="ind-lbl">RSI (14)</span>
+        <span className="ind-val" style={{color:rsi<30?'var(--green)':rsi>70?'var(--red)':'var(--text)'}}>{F.num(rsi,1)}</span>
+        <span className={`sig ${rsi<30?'sb':rsi<45?'b':rsi>70?'ss':rsi>55?'s':'n'}`}>{rsi<30?'OVERSOLD':rsi>70?'OVERBOUGHT':rsi<45?'BUY ZONE':rsi>55?'SELL ZONE':'NEUTRAL'}</span>
+      </div>
+      <div className="gauge">
+        <div className="g-track">
+          <div style={{width:'30%',height:'100%',background:'rgba(22,199,132,.3)'}}/>
+          <div style={{width:'40%',height:'100%',background:'rgba(255,255,255,.05)'}}/>
+          <div style={{width:'30%',height:'100%',background:'rgba(234,57,67,.3)'}}/>
+          <div className="g-needle" style={{left:rsi+'%'}}/>
+        </div>
+        <div className="g-labels"><span>0</span><span>30</span><span>50</span><span>70</span><span>100</span></div>
+      </div>
+
+      <div className="ind-row">
+        <span className="ind-lbl">Stochastic %K</span>
+        <span className="ind-val">{F.num(stk,1)}</span>
+        <span className={`sig ${stk<20?'sb':stk<35?'b':stk>80?'ss':stk>65?'s':'n'}`}>{stk<20?'OVERSOLD':stk>80?'OVERBOUGHT':'NEUTRAL'}</span>
+      </div>
+
+      {wr!=null&&<div className="ind-row">
+        <span className="ind-lbl">Williams %R</span>
+        <span className="ind-val">{F.num(wr,1)}</span>
+        <span className={`sig ${wr<-80?'sb':wr<-65?'b':wr>-20?'ss':wr>-35?'s':'n'}`}>{wr<-80?'OVERSOLD':wr>-20?'OVERBOUGHT':'NEUTRAL'}</span>
+      </div>}
+
+      {cci!=null&&<div className="ind-row">
+        <span className="ind-lbl">CCI (20)</span>
+        <span className="ind-val">{F.num(cci,1)}</span>
+        <span className={`sig ${cci<-100?'sb':cci<-50?'b':cci>100?'ss':cci>50?'s':'n'}`}>{cci<-100?'OVERSOLD':cci>100?'OVERBOUGHT':'NEUTRAL'}</span>
+      </div>}
+
+      <div className="sec-hd">MACD</div>
+      <div className="ind-row">
+        <span className="ind-lbl">MACD Line</span>
+        <span className="ind-val" style={{color:mv>sv?'var(--green)':'var(--red)'}}>{F.num(mv,4)}</span>
+        <span className={`sig ${hv>0&&mv>sv?'sb':hv>0?'b':hv<0&&mv<sv?'ss':'s'}`}>{hv>0?'BULLISH':'BEARISH'}</span>
+      </div>
+      <div className="ind-row"><span className="ind-lbl">Signal Line</span><span className="ind-val">{F.num(sv,4)}</span></div>
+      <div className="ind-row">
+        <span className="ind-lbl">Histogram</span>
+        <span className="ind-val" style={{color:hv>0?'var(--green)':'var(--red)'}}>{F.num(hv,4)}</span>
+        <span className={`sig ${hv>0?'b':'s'}`}>{hv>0?'POS':'NEG'}</span>
+      </div>
+
+      <div className="sec-hd">Moving Averages</div>
+      {[{p:9,v:e9,l:'EMA 9'},{p:20,v:e20,l:'EMA 20'},{p:50,v:e50,l:'EMA 50'},{p:100,v:e100,l:'EMA 100'},{p:200,v:e200,l:'EMA 200'}].map(({v,l})=>(
+        v!=null&&<div key={l} className="ind-row">
+          <span className="ind-lbl">{l}</span>
+          <span className="ind-val">{pf(v)}</span>
+          <span className={`sig ${p>v?'b':'s'}`}>{p>v?'ABOVE':'BELOW'}</span>
+        </div>
+      ))}
+      {e50!=null&&e200!=null&&<div className="ind-row">
+        <span className="ind-lbl">50/200 MA Cross</span>
+        <span className={`sig ${e50>e200?'sb':'ss'}`}>{e50>e200?'GOLDEN CROSS ✨':'DEATH CROSS ☠️'}</span>
+      </div>}
+
+      {adx&&<><div className="sec-hd">ADX Trend Strength</div>
+        <div className="ind-row"><span className="ind-lbl">ADX (14)</span><span className="ind-val">{F.num(adx.adx,1)}</span><span className={`sig ${adx.adx>40?'sb':adx.adx>25?'b':'n'}`}>{adx.adx>40?'STRONG':adx.adx>25?'TRENDING':'RANGING'}</span></div>
+        <div className="ind-row"><span className="ind-lbl">+DI (Bull)</span><span className="ind-val" style={{color:'var(--green)'}}>{F.num(adx.pdi,1)}</span></div>
+        <div className="ind-row"><span className="ind-lbl">-DI (Bear)</span><span className="ind-val" style={{color:'var(--red)'}}>{F.num(adx.mdi,1)}</span></div>
+      </>}
+
+      <div className="sec-hd">Bollinger Bands (20,2)</div>
+      {bb?.upper&&<>
+        <div className="ind-row"><span className="ind-lbl">Upper Band</span><span className="ind-val">{pf(bb.upper)}</span><span className={`sig ${p>=bb.upper*0.99?'ss':'n'}`}>{p>=bb.upper*0.99?'AT UPPER':'—'}</span></div>
+        <div className="ind-row"><span className="ind-lbl">Middle Band</span><span className="ind-val">{pf(bb.mid)}</span></div>
+        <div className="ind-row"><span className="ind-lbl">Lower Band</span><span className="ind-val">{pf(bb.lower)}</span><span className={`sig ${p<=bb.lower*1.01?'sb':'n'}`}>{p<=bb.lower*1.01?'AT LOWER':'—'}</span></div>
+        <div className="ind-row"><span className="ind-lbl">%B Position</span><span className="ind-val">{F.num(bb.pct,1)}%</span><span className={`sig ${bb.pct>80?'ss':bb.pct<20?'sb':'n'}`}>{bb.pct>80?'OVERBOUGHT':bb.pct<20?'OVERSOLD':'NORMAL'}</span></div>
+        <div className="ind-row"><span className="ind-lbl">Band Width</span><span className="ind-val">{F.num((bb.upper-bb.lower)/bb.mid*100,2)}%</span></div>
+      </>}
+
+      <div className="sec-hd">Volatility & Volume</div>
+      <div className="ind-row"><span className="ind-lbl">ATR (14)</span><span className="ind-val">{pf(atr)}</span></div>
+      {vwap&&<div className="ind-row"><span className="ind-lbl">VWAP</span><span className="ind-val">{pf(vwap)}</span><span className={`sig ${p>vwap?'b':'s'}`}>{p>vwap?'ABOVE':'BELOW'}</span></div>}
+      <div className="ind-row"><span className="ind-lbl">Volume vs Avg</span><span className="ind-val">{F.num(volRatio*100,0)}%</span><span className={`sig ${volRatio>1.5?'sb':volRatio<0.5?'s':'n'}`}>{volRatio>1.5?'HIGH':volRatio<0.5?'LOW':'NORMAL'}</span></div>
+      <div className="ind-row"><span className="ind-lbl">OBV Trend</span><span className={`sig ${obvTrend==='Rising'?'b':'s'}`}>{obvTrend==='Rising'?'↑ RISING':'↓ FALLING'}</span></div>
+
+      <div className="sec-hd">Pivot Points (Classic)</div>
+      <div className="ind-row"><span className="ind-lbl">Pivot</span><span className="ind-val" style={{color:'var(--cyan)'}}>{pf(pivot)}</span></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px'}}>
+        {[{l:'R3',v:r3},{l:'R2',v:r2},{l:'R1',v:r1}].map(x=><div key={x.l} className="ind-row"><span className="ind-lbl">{x.l}</span><span className="ind-val" style={{color:'var(--red)'}}>{pf(x.v)}</span></div>)}
+        {[{l:'S1',v:s1},{l:'S2',v:s2},{l:'S3',v:s3}].map(x=><div key={x.l} className="ind-row"><span className="ind-lbl">{x.l}</span><span className="ind-val" style={{color:'var(--green)'}}>{pf(x.v)}</span></div>)}
+      </div>
+
+      <div className="sec-hd">Support & Resistance</div>
+      <div className="sr-grid">
+        <div><div className="sr-hd r">Resistance</div>{sr.resistance.map((v,i)=><div key={i} className="sr-lv">{pf(v)}</div>)}{!sr.resistance.length&&<div className="sr-lv" style={{fontStyle:'italic',color:'var(--faint)'}}>None</div>}</div>
+        <div><div className="sr-hd s">Support</div>{sr.support.map((v,i)=><div key={i} className="sr-lv">{pf(v)}</div>)}{!sr.support.length&&<div className="sr-lv" style={{fontStyle:'italic',color:'var(--faint)'}}>None</div>}</div>
+      </div>
+
+      {pats.length>0&&<><div className="sec-hd">Candlestick Patterns</div>
+        <div>{pats.map((pt,i)=><span key={i} className={`pc ${pt.type==='Bullish'?'b':pt.type==='Bearish'?'s':'n'}`}>{pt.name}</span>)}</div>
+      </>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// FUNDAMENTALS TAB
+// ═══════════════════════════════════════════════════════
+function FundTab({symbol,type,base}) {
+  const [d,setD]=useState(null);
+  const [ldg,setLdg]=useState(true);
+  const [err,setErr]=useState(null);
+
+  useEffect(()=>{
+    setLdg(true);setD(null);setErr(null);
+    (async()=>{
+      try {
+        if(type==='CRYPTO'){
+          const j=await cgCoin(base);
+          const md=j.market_data||{};
+          setD({type:'crypto',name:j.name,rank:j.market_cap_rank,
+            desc:j.description?.en?.replace(/<[^>]+>/g,'')?.slice(0,600),
+            link:j.links?.homepage?.[0],twitter:j.links?.twitter_screen_name,
+            marketCap:md.market_cap?.usd,fdv:md.fully_diluted_valuation?.usd,
+            circSupply:md.circulating_supply,totalSupply:md.total_supply,maxSupply:md.max_supply,
+            ath:md.ath?.usd,atl:md.atl?.usd,
+            c7d:md.price_change_percentage_7d_in_currency?.usd,
+            c30d:md.price_change_percentage_30d_in_currency?.usd,
+            c1y:md.price_change_percentage_1y_in_currency?.usd,
+            vol24:md.total_volume?.usd,
+            twFollowers:j.community_data?.twitter_followers,
+            redditSubs:j.community_data?.reddit_subscribers,
+          });
+        } else {
+          const fd=await yfFund(symbol);
+          setD({type:'stock',...fd});
+        }
+      } catch(e){setErr(e.message);}
+      setLdg(false);
+    })();
+  },[symbol,type,base]);
+
+  if(ldg) return <div className="err-box"><div className="spin" style={{margin:'0 auto 8px'}}/></div>;
+  if(err) return <div className="err-box">⚠️ {err}<br/><small style={{color:'var(--faint)',lineHeight:1.5}}>Data may be rate-limited. Wait 60s and retry.</small></div>;
+  if(!d) return null;
+
+  const FR=({label,val,cls})=>(
+    <div className="fund-row">
+      <span className="fund-lbl">{label}</span>
+      <span className={`fund-val ${cls||''}`}>{val}</span>
+    </div>
+  );
+  const pc=v=>v==null?'':v>0?'p':'n';
+
+  if(d.type==='crypto') return (
+    <div>
+      {d.rank&&<div style={{padding:'6px 9px',marginBottom:7,background:'rgba(34,211,238,.05)',border:'1px solid rgba(34,211,238,.15)',borderRadius:7,fontSize:11,color:'var(--cyan)',fontWeight:700}}>🏆 Market Cap Rank #{d.rank}</div>}
+      <div className="sec-hd">Market Data</div>
+      <div className="fund-blk">
+        <FR label="Market Cap" val={F.compact(d.marketCap)}/>
+        <FR label="FDV" val={F.compact(d.fdv)}/>
+        <FR label="24h Volume" val={F.compact(d.vol24)}/>
+        <FR label="Circ. Supply" val={d.circSupply?d.circSupply.toLocaleString():'—'}/>
+        <FR label="Total Supply" val={d.totalSupply?d.totalSupply.toLocaleString():'Unlimited'}/>
+        <FR label="Max Supply" val={d.maxSupply?d.maxSupply.toLocaleString():'—'}/>
+      </div>
+      <div className="sec-hd">Price History</div>
+      <div className="fund-blk">
+        <FR label="All-Time High" val={F.price(d.ath)} cls="p"/>
+        <FR label="All-Time Low" val={F.price(d.atl)} cls="n"/>
+        <FR label="7D Change" val={d.c7d!=null?F.num(d.c7d,1)+'%':'—'} cls={pc(d.c7d)}/>
+        <FR label="30D Change" val={d.c30d!=null?F.num(d.c30d,1)+'%':'—'} cls={pc(d.c30d)}/>
+        <FR label="1Y Change" val={d.c1y!=null?F.num(d.c1y,1)+'%':'—'} cls={pc(d.c1y)}/>
+      </div>
+      {(d.twFollowers||d.redditSubs)&&<><div className="sec-hd">Community</div>
+        <div className="fund-blk">
+          {d.twFollowers&&<FR label="Twitter" val={d.twFollowers.toLocaleString()+' followers'}/>}
+          {d.redditSubs&&<FR label="Reddit" val={d.redditSubs.toLocaleString()+' subscribers'}/>}
+        </div>
+      </>}
+      {d.desc&&<><div className="sec-hd">About</div><div className="about">{d.desc}…</div></>}
+      {d.link&&<a href={d.link} target="_blank" rel="noreferrer" style={{display:'block',marginTop:7,fontSize:11,color:'var(--cyan)',textDecoration:'none'}}>🌐 Official Website →</a>}
+    </div>
+  );
+
+  // Stock
+  return (
+    <div>
+      <div className="fund-hdr">
+        <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{d.name||symbol}</div>
+        <div style={{fontSize:10,color:'var(--faint)',marginTop:2}}>{[d.exchange,d.sector,d.country].filter(Boolean).join(' · ')}</div>
+        {d.website&&<a href={d.website} target="_blank" rel="noreferrer" style={{fontSize:10,color:'var(--cyan)',textDecoration:'none',display:'block',marginTop:3}}>🌐 {d.website.replace(/https?:\/\//,'')}</a>}
+      </div>
+
+      <div className="sec-hd">Valuation</div>
+      <div className="fund-blk">
+        <FR label="Market Cap" val={F.compact(d.marketCap)}/>
+        <FR label="P/E Ratio (TTM)" val={d.pe?F.num(d.pe):'N/A'} cls={!d.pe?'':d.pe>50?'w':d.pe<15?'p':''}/>
+        <FR label="Forward P/E" val={d.forwardPE?F.num(d.forwardPE):'N/A'}/>
+        <FR label="P/B Ratio" val={d.priceToBook?F.num(d.priceToBook):'N/A'} cls={d.priceToBook&&d.priceToBook<1?'p':''}/>
+        <FR label="EPS (TTM)" val={d.eps?'$'+F.num(d.eps):'N/A'} cls={d.eps!=null&&d.eps>0?'p':'n'}/>
+        <FR label="Beta" val={d.beta?F.num(d.beta):'N/A'} cls={d.beta&&d.beta>1.5?'w':''}/>
+      </div>
+
+      <div className="sec-hd">Financial Health</div>
+      <div className="fund-blk">
+        <FR label="Revenue (TTM)" val={F.compact(d.revenue)}/>
+        <FR label="Free Cash Flow" val={F.compact(d.fcf)} cls={d.fcf!=null&&d.fcf>0?'p':'n'}/>
+        <FR label="Operating CF" val={F.compact(d.operCF)}/>
+        <FR label="Profit Margin" val={d.profitMargin!=null?F.pct(d.profitMargin):'—'} cls={d.profitMargin!=null&&d.profitMargin>0.2?'p':d.profitMargin!=null&&d.profitMargin<0?'n':''}/>
+        <FR label="Gross Margin" val={d.grossMargin!=null?F.pct(d.grossMargin):'—'} cls={d.grossMargin&&d.grossMargin>0.4?'p':''}/>
+        <FR label="Revenue Growth" val={d.revenueGrowth!=null?F.pct(d.revenueGrowth):'—'} cls={pc(d.revenueGrowth)}/>
+        <FR label="Earnings Growth" val={d.earningsGrowth!=null?F.pct(d.earningsGrowth):'—'} cls={pc(d.earningsGrowth)}/>
+        <FR label="ROE" val={d.roe!=null?F.pct(d.roe):'—'} cls={d.roe&&d.roe>0.15?'p':''}/>
+        <FR label="ROA" val={d.roa!=null?F.pct(d.roa):'—'} cls={d.roa&&d.roa>0.05?'p':''}/>
+        <FR label="Debt/Equity" val={d.debtToEquity!=null?F.num(d.debtToEquity):'—'} cls={d.debtToEquity!=null&&d.debtToEquity>2?'n':d.debtToEquity!=null&&d.debtToEquity<0.5?'p':'w'}/>
+      </div>
+
+      <div className="sec-hd">Price Levels</div>
+      <div className="fund-blk">
+        <FR label="52W High" val={d.high52w?'$'+F.num(d.high52w):'—'} cls="p"/>
+        <FR label="52W Low" val={d.low52w?'$'+F.num(d.low52w):'—'} cls="n"/>
+        <FR label="50D MA" val={d.ma50?'$'+F.num(d.ma50):'—'}/>
+        <FR label="200D MA" val={d.ma200?'$'+F.num(d.ma200):'—'}/>
+        <FR label="Avg Volume" val={d.avgVol?d.avgVol.toLocaleString():'—'}/>
+        <FR label="Book Value" val={d.bookValue?'$'+F.num(d.bookValue):'—'}/>
+        <FR label="Short Ratio" val={d.shortRatio?F.num(d.shortRatio)+'x':'—'} cls={d.shortRatio&&d.shortRatio>5?'n':''}/>
+      </div>
+
+      {d.dividendYield>0&&<><div className="sec-hd">Dividends</div>
+        <div className="fund-blk"><FR label="Dividend Yield" val={F.pct(d.dividendYield)} cls="p"/></div>
+      </>}
+
+      {d.numAnalysts>0&&<><div className="sec-hd">Analyst Consensus ({d.numAnalysts} analysts)</div>
+        <div className="fund-blk">
+          <div style={{fontSize:14,fontWeight:800,textTransform:'uppercase',color:d.recommendation?.includes('buy')?'var(--green)':d.recommendation?.includes('sell')?'var(--red)':'var(--amber)',marginBottom:6,textAlign:'center'}}>
+            {(d.recommendation||'').replace(/_/g,' ')}
+          </div>
+          {d.targetMean&&<FR label="Price Target (Avg)" val={'$'+F.num(d.targetMean)} cls="p"/>}
+          {d.targetLow&&d.targetHigh&&<FR label="Target Range" val={`$${F.num(d.targetLow)} – $${F.num(d.targetHigh)}`}/>}
+        </div>
+      </>}
+
+      {d.employees&&<><div className="sec-hd">Company Info</div>
+        <div className="fund-blk">
+          <FR label="Sector" val={d.sector||'—'}/>
+          <FR label="Industry" val={d.industry||'—'}/>
+          <FR label="Country" val={d.country||'—'}/>
+          <FR label="Employees" val={d.employees?d.employees.toLocaleString():'—'}/>
+        </div>
+      </>}
+
+      {d.description&&<><div className="sec-hd">About</div><div className="about">{d.description}</div></>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// NEWS & VIDEO TAB
+// ═══════════════════════════════════════════════════════
+function NewsTab({symbol,type,base}) {
+  const [news,setNews]=useState([]);
+  const [ldg,setLdg]=useState(true);
+  const [err,setErr]=useState(null);
+
+  useEffect(()=>{
+    setLdg(true);setNews([]);setErr(null);
+    (async()=>{
+      try {
+        let items=[];
+        if(type==='CRYPTO'){
+          try {
+            const j=await cpNews(base);
+            items=(j.results||[]).map(n=>({
+              title:n.title,link:n.url,date:n.created_at,source:n.source?.title||'CryptoPanic',
+              sentiment:n.votes?.positive>n.votes?.negative?'Bullish':n.votes?.negative>n.votes?.positive?'Bearish':'Neutral',
+              type:'news'
+            }));
+          } catch {
+            items=await yfNews(base+'-USD');
+            items=items.map(n=>({...n,type:'news'}));
+          }
+        } else {
+          items=await yfNews(symbol);
+          items=items.map(n=>({...n,type:'news'}));
+        }
+        setNews(items.slice(0,20));
+      } catch(e){setErr(e.message);}
+      setLdg(false);
+    })();
+  },[symbol,type,base]);
+
+  if(ldg) return <div className="err-box"><div className="spin" style={{margin:'0 auto 8px'}}/></div>;
+  if(err) return <div className="err-box">⚠️ {err}</div>;
+  if(!news.length) return <div className="err-box">No news found.</div>;
+
+  const bulls=news.filter(n=>n.sentiment==='Bullish').length;
+  const bears=news.filter(n=>n.sentiment==='Bearish').length;
+  const total=news.length;
+  const bullPct=Math.round(bulls/total*100);
+
+  // YouTube search URL for the asset
+  const ytQuery=encodeURIComponent(`${symbol.replace('USDT','').replace('.NS','').replace('.BO','')} stock analysis 2024`);
+  const ytUrl=`https://www.youtube.com/results?search_query=${ytQuery}`;
+
+  return (
+    <div>
+      {/* Sentiment meter */}
+      <div className="sent-meter">
+        <span style={{color:'var(--faint)'}}>Sentiment ({total} articles)</span>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <span style={{fontSize:11,color:'var(--green)',fontWeight:700}}>{bullPct}% 🟢</span>
+          <div style={{width:50,height:5,background:'rgba(255,255,255,.07)',borderRadius:3,overflow:'hidden'}}>
+            <div style={{height:'100%',width:bullPct+'%',background:'var(--green)'}}/>
+          </div>
+          <span style={{fontSize:11,color:'var(--red)',fontWeight:700}}>{Math.round(bears/total*100)}% 🔴</span>
+        </div>
+      </div>
+
+      {/* YouTube Video Button */}
+      <a href={ytUrl} target="_blank" rel="noreferrer" className="news-vid">
+        <div className="yt-play">▶</div>
+        <div>
+          <div className="vid-ttl">Watch {symbol.replace('USDT','').replace('.NS','').replace('.BO','')} Analysis Videos on YouTube</div>
+          <div className="vid-src">📺 YouTube · Click to search latest videos</div>
+        </div>
+      </a>
+
+      {/* News Items */}
+      {news.map((n,i)=>(
+        <a key={i} href={n.link} target="_blank" rel="noreferrer" className="news-item">
+          <div className="news-ttl">{n.title}</div>
+          <div className="news-meta">
+            <span className={`sent ${n.sentiment==='Bullish'?'bull':n.sentiment==='Bearish'?'bear':'neut'}`}>{n.sentiment}</span>
+            <span>{n.source}</span>
+            <span>{F.ago(n.date)}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// MARKET OVERVIEW TAB
+// ═══════════════════════════════════════════════════════
+function MarketTab({cpx}) {
+  const [gl,setGl]=useState(null);
+  const [fg,setFg]=useState(null);
+  const [tr,setTr]=useState([]);
+  const [ldg,setLdg]=useState(true);
+
+  useEffect(()=>{
+    Promise.allSettled([cgGlobal(),fearGreed(),cgTrending()]).then(([g,f,t])=>{
+      if(g.status==='fulfilled') setGl(g.value?.data);
+      if(f.status==='fulfilled') setFg(f.value);
+      if(t.status==='fulfilled') setTr(t.value?.coins?.slice(0,8)||[]);
+      setLdg(false);
+    });
+  },[]);
+
+  const sorted=Object.entries(cpx).map(([s,d])=>({s,c:+d.c})).filter(x=>!isNaN(x.c)).sort((a,b)=>b.c-a.c);
+  const gainers=sorted.slice(0,5), losers=sorted.slice(-5).reverse();
+
+  if(ldg) return <div className="err-box"><div className="spin" style={{margin:'0 auto 8px'}}/></div>;
+
+  const fgV=fg?+fg.value:null;
+  const fgC=fgV==null?'#8b93a7':fgV<25?'var(--red)':fgV<45?'#f97316':fgV<55?'var(--amber)':fgV<75?'var(--cyan)':'var(--green)';
+  const C=2*Math.PI*35, dash=fgV?fgV/100*C:0;
+
+  return (
+    <div>
+      {fg&&<>
+        <div className="sec-hd">Fear & Greed Index</div>
+        <div style={{textAlign:'center',marginBottom:10}}>
+          <div className="fg-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="7"/>
+              <circle cx="40" cy="40" r="35" fill="none" stroke={fgC} strokeWidth="7"
+                strokeDasharray={`${dash} ${C}`} strokeLinecap="round"/>
+            </svg>
+            <div className="fg-center">
+              <div className="fg-num" style={{color:fgC}}>{fg.value}</div>
+              <div className="fg-lbl">{fg.value_classification}</div>
             </div>
-        );
+          </div>
+        </div>
+      </>}
 
-        const Sidebar = ({ onSelect, activeSymbol, prices, watchlist, onToggleWL }) => {
-            const [mode, setMode] = useState('CRYPTO'); // CRYPTO | STOCKS | WATCHLIST
-            const [search, setSearch] = useState('');
-            const [cryptoList, setCryptoList] = useState([]);
-            const [stockTab, setStockTab] = useState('US Tech');
-            const [loading, setLoading] = useState(true);
+      {gl&&<>
+        <div className="sec-hd">Global Crypto Market</div>
+        <div className="mkt-grid">
+          <div className="mkt-stat"><div className="mkt-lbl">Market Cap</div><div className="mkt-val" style={{color:'var(--cyan)',fontSize:11}}>{F.compact(gl.total_market_cap?.usd)}</div>
+            <div style={{fontSize:9,color:gl.market_cap_change_percentage_24h_usd>=0?'var(--green)':'var(--red)',marginTop:2}}>{gl.market_cap_change_percentage_24h_usd?.toFixed(1)}% 24h</div>
+          </div>
+          <div className="mkt-stat"><div className="mkt-lbl">24h Volume</div><div className="mkt-val" style={{fontSize:11}}>{F.compact(gl.total_volume?.usd)}</div></div>
+          <div className="mkt-stat"><div className="mkt-lbl">BTC Dom.</div><div className="mkt-val" style={{color:'#f59e0b'}}>{gl.market_cap_percentage?.btc?.toFixed(1)}%</div></div>
+          <div className="mkt-stat"><div className="mkt-lbl">ETH Dom.</div><div className="mkt-val" style={{color:'#7c6ff0'}}>{gl.market_cap_percentage?.eth?.toFixed(1)}%</div></div>
+          <div className="mkt-stat" style={{gridColumn:'1/-1'}}><div className="mkt-lbl">Active Coins</div><div className="mkt-val">{gl.active_cryptocurrencies?.toLocaleString()}</div></div>
+        </div>
+      </>}
 
-            useEffect(() => {
-                if (mode === 'CRYPTO') {
-                    setLoading(true);
-                    fetch('https://api.binance.com/api/v3/ticker/24hr')
-                        .then(res => res.json())
-                        .then(data => {
-                            const top = data.filter(d => d.symbol.endsWith('USDT'))
-                                .sort((a,b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-                                .slice(0, 100)
-                                .map(d => ({
-                                    s: d.symbol,
-                                    n: d.symbol.replace('USDT', ''),
-                                    p: d.lastPrice,
-                                    c: d.priceChangePercent
-                                }));
-                            setCryptoList(top);
-                            setLoading(false);
-                        }).catch(() => setLoading(false));
-                }
-            }, [mode]);
+      <div className="sec-hd">Top Gainers (24h)</div>
+      {gainers.map(g=><div key={g.s} className="gain-row"><span style={{color:'var(--dim)',fontWeight:600}}>{g.s.replace('USDT','')}</span><span style={{color:'var(--green)',fontFamily:'var(--fm)',fontWeight:700}}>+{g.c.toFixed(2)}%</span></div>)}
 
-            const assets = useMemo(() => {
-                let list = [];
-                if (mode === 'CRYPTO') list = cryptoList;
-                else if (mode === 'STOCKS') list = ASSET_REGISTRY.STOCKS[stockTab].map(s => ({ s, n: s }));
-                else list = watchlist.map(s => ({ s, n: s }));
+      <div className="sec-hd" style={{marginTop:10}}>Top Losers (24h)</div>
+      {losers.map(g=><div key={g.s} className="gain-row"><span style={{color:'var(--dim)',fontWeight:600}}>{g.s.replace('USDT','')}</span><span style={{color:'var(--red)',fontFamily:'var(--fm)',fontWeight:700}}>{g.c.toFixed(2)}%</span></div>)}
 
-                if (search) list = list.filter(a => a.s.toLowerCase().includes(search.toLowerCase()));
-                return list;
-            }, [mode, cryptoList, stockTab, search, watchlist]);
+      {tr.length>0&&<><div className="sec-hd" style={{marginTop:10}}>🔥 Trending</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+          {tr.map((t,i)=><span key={i} style={{fontSize:10,padding:'2px 8px',background:'rgba(124,111,240,.1)',border:'1px solid rgba(124,111,240,.2)',borderRadius:10,color:'var(--violet)',fontWeight:700}}>#{i+1} {t.item?.symbol}</span>)}
+        </div>
+      </>}
+    </div>
+  );
+}
 
+// ═══════════════════════════════════════════════════════
+// AI INSIGHTS TAB
+// ═══════════════════════════════════════════════════════
+function AITab({ohlcv,symbol}) {
+  const ins=useMemo(()=>{
+    if(!ohlcv||ohlcv.length<50) return null;
+    const cls=ohlcv.map(d=>d.close), n=ohlcv.length, last=ohlcv[n-1], p=last.close;
+    const rsi=I.rsi(cls,14)[n-1];
+    const macd=I.macd(cls); const hv=macd.hist[n-1], mv=macd.line[n-1], sv=macd.signal[n-1];
+    const e20=I.ema(cls,20)[n-1], e50=I.ema(cls,50)[n-1], e200=I.ema(cls,200)[n-1];
+    const bb=I.bb(cls,20,2)[n-1];
+    const atr=I.atr(ohlcv,14)[n-1];
+    const sr=I.sr(ohlcv,3);
+    const pats=I.patterns(ohlcv);
+    const adx=I.adx(ohlcv,14);
+    const trend=p>e50?'bullish':'bearish';
+    const rsiS=rsi<30?'severely oversold (extreme opportunity zone)':rsi<40?'mildly oversold':rsi>70?'severely overbought (caution zone)':rsi>60?'mildly overbought':'neutral territory';
+    const macdS=hv>0&&mv>sv?'strongly bullish (positive histogram + above signal)':hv>0?'mildly bullish':hv<0&&mv<sv?'strongly bearish (negative histogram + below signal)':'mildly bearish';
+    const emaS=p>e20&&e20>e50?'in full bullish alignment (price > EMA20 > EMA50)':p<e20&&e20<e50?'in full bearish alignment (price < EMA20 < EMA50)':'showing mixed EMA signals — consolidation or reversal likely';
+    const bbS=bb?p>=bb.upper*0.99?'near upper BB (overbought zone)':p<=bb.lower*1.01?'near lower BB (strong support zone)':'inside the Bollinger Band range (normal)':'';
+    const adxS=adx?adx.adx>40?'strong directional trend (ADX>40)':adx.adx>25?'trending market (ADX>25)':'ranging/consolidating market (ADX<25)':'';
+    const entry=trend==='bullish'?`Buy dips to EMA-20 (~${F.price(e20,'')}), confirmed with volume spike`:
+      `Short bounces to EMA-20 (~${F.price(e20,'')}), with tight stops`;
+    const sl=trend==='bullish'?sr.support[0]?`Below ${F.price(sr.support[0],'')} (key support)`:'Below recent swing low':
+      sr.resistance[0]?`Above ${F.price(sr.resistance[0],'')} (key resistance)`:'Above recent swing high';
+    const tp1=trend==='bullish'?sr.resistance[0]?F.price(sr.resistance[0],''):F.price(p*1.05,''):sr.support[0]?F.price(sr.support[0],''):F.price(p*0.95,'');
+    const tp2=trend==='bullish'?sr.resistance[1]?F.price(sr.resistance[1],''):F.price(p*1.1,''):sr.support[1]?F.price(sr.support[1],''):F.price(p*0.9,'');
+    let score=0;
+    if(rsi<40) score+=2; else if(rsi>60) score-=2;
+    if(hv>0) score+=2; else score-=2;
+    if(p>e50) score+=2; else score-=2;
+    if(e50>e200) score+=1; else score-=1;
+    if(adx&&adx.adx>25) score+=(adx.pdi>adx.mdi?1:-1);
+    const verdict=score>=5?'STRONG BUY 🚀':score>=3?'BUY 📈':score<=-5?'STRONG SELL 💥':score<=-3?'SELL 📉':'NEUTRAL ⚖️';
+    const vColor=verdict.includes('BUY')?'var(--green)':verdict.includes('SELL')?'var(--red)':'var(--dim)';
+    return {rsi,hv,mv,sv,e20,e50,e200,atr,bb,pats,verdict,vColor,score,trend,rsiS,macdS,emaS,bbS,adxS,entry,sl,tp1,tp2,sr,p};
+  },[ohlcv]);
+
+  if(!ins) return <div className="err-box"><div className="spin" style={{margin:'0 auto 8px'}}/><p style={{marginTop:6}}>Computing AI analysis…</p></div>;
+  const {rsi,hv,e20,e50,pats,verdict,vColor,score,trend,rsiS,macdS,emaS,bbS,adxS,entry,sl,tp1,tp2} = ins;
+
+  return (
+    <div>
+      <div className="ai-card">
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:'var(--violet)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🤖</div>
+          <div>
+            <div style={{fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--violet)'}}>Nexus AI Engine</div>
+            <div style={{fontSize:10,color:'var(--faint)'}}>{symbol} · Rule-based analysis</div>
+          </div>
+        </div>
+        <div className="ai-verdict" style={{color:vColor}}>{verdict}</div>
+        <div className="ai-score">Score: {score>0?'+':''}{score}/6 · Trend: {trend.toUpperCase()}</div>
+        <div className="ai-txt">
+          <strong>{symbol}</strong> is in a <strong>{trend}</strong> structure. RSI({F.num(rsi,1)}) is {rsiS}. MACD is {macdS}. Price is {emaS}. {bbS&&<>Price is {bbS}. </>}{adxS&&<>Trend meter shows {adxS}.</>}
+        </div>
+      </div>
+
+      {pats.length>0&&<><div className="sec-hd">Detected Patterns</div>
+        <div style={{marginBottom:10}}>{pats.map((pt,i)=><span key={i} className={`pc ${pt.type==='Bullish'?'b':pt.type==='Bearish'?'s':'n'}`}>{pt.name}</span>)}</div>
+      </>}
+
+      <div className="sec-hd">Strategy Blueprint</div>
+      <div className="strat">
+        <div className="strat-row"><div className="strat-key">ENTRY</div><div className="strat-val">{entry}</div></div>
+        <div className="strat-row"><div className="strat-key">STOP</div><div className="strat-val">{sl}</div></div>
+        <div className="strat-row"><div className="strat-key">TARGET 1</div><div className="strat-val">{tp1}</div></div>
+        <div className="strat-row"><div className="strat-key">TARGET 2</div><div className="strat-val">{tp2}</div></div>
+        <div className="strat-row"><div className="strat-key">R:R</div><div className="strat-val">Aim for minimum 1:2 Risk/Reward ratio</div></div>
+      </div>
+      <div className="disc">⚠️ This AI analysis is generated by rule-based algorithms for educational purposes only. Not SEBI/FINRA registered investment advice. Always do your own research (DYOR) before trading.</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// TRADINGVIEW TAB
+// ═══════════════════════════════════════════════════════
+function TVTab({symbol,type}) {
+  const tvSym = type==='CRYPTO'
+    ? `BINANCE:${symbol}`
+    : symbol.replace('.NS',':NSE').replace('.BO',':BSE').startsWith('^')
+      ? symbol.replace('^NSEI','NSE:NIFTY').replace('^BSESN','BSE:SENSEX').replace('^','').replace('GSPC','SP:SPX').replace('DJI','DJ:DJI').replace('IXIC','NASDAQ:IXIC')
+      : symbol.replace(/\.(L|DE|T|NS|BO)$/,'');
+  return (
+    <iframe
+      className="tv-frame"
+      src={`https://www.tradingview.com/widgetbar-chart/?symbol=${encodeURIComponent(tvSym)}&theme=dark&interval=D&style=1&locale=en&toolbar_bg=%230a0e14&enable_publishing=false&hide_side_toolbar=false&allow_symbol_change=true`}
+      title="TradingView"
+    />
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// HEADER
+// ═══════════════════════════════════════════════════════
+function Header({symbol,type,base,cpx}) {
+  const [clock,setClock]=useState('');
+  const [sqPx,setSqPx]=useState(null);
+  const [idxPx,setIdxPx]=useState({});
+
+  useEffect(()=>{
+    const t=setInterval(()=>setClock(new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})),1000);
+    return ()=>clearInterval(t);
+  },[]);
+
+  // fetch index prices
+  useEffect(()=>{
+    const syms=INDICES.map(i=>i.sym);
+    const load=()=>yfBatch(syms).then(r=>setIdxPx(r)).catch(()=>{});
+    load();
+    const iv=setInterval(load,30000);
+    return ()=>clearInterval(iv);
+  },[]);
+
+  // fetch stock price if stock mode
+  useEffect(()=>{
+    if(type!=='STOCK'){setSqPx(null);return;}
+    const load=()=>yfBatch([symbol]).then(r=>setSqPx(r[symbol]||null)).catch(()=>{});
+    load();
+    const iv=setInterval(load,15000);
+    return ()=>clearInterval(iv);
+  },[symbol,type]);
+
+  const px=type==='CRYPTO'?cpx[symbol]:sqPx;
+  const price=px?F.price(px.p):'—';
+  const chg=px?+px.c:null;
+  const up=chg>=0;
+
+  return (
+    <header className="hdr">
+      <div className="logo">
+        <div className="logo-mark">N</div>
+        <span className="logo-name">NEXUS <span className="logo-accent">Terminal</span></span>
+      </div>
+      <div className="hdr-center">
+        <span className="hdr-sym">{symbol.replace('USDT','').replace(/\.(NS|BO|L|DE|T)$/,'').replace('^','')}{type==='CRYPTO'?'/USDT':''}</span>
+        <span className={`hdr-price ${up?'up':'dn'}`}>{price}{chg!=null&&<span className="hdr-chg"> {up?'+':''}{chg.toFixed(2)}%</span>}</span>
+        <div className="hdr-indices">
+          {INDICES.map(idx=>{
+            const d=idxPx[idx.sym]; const v=d?F.price(d.p,''):'—'; const c=d?+d.c:null;
             return (
-                <aside className="glass border-r border-white/5 flex flex-col overflow-hidden">
-                    <div className="p-4 border-b border-white/5 space-y-4">
-                        <div className="flex p-1 bg-white/5 rounded-xl border border-white/5">
-                            {['CRYPTO', 'STOCKS', 'WL'].map(m => (
-                                <button 
-                                    key={m}
-                                    onClick={() => setMode(m === 'WL' ? 'WATCHLIST' : m)}
-                                    className={`flex-1 py-2 text-[10px] font-bold rounded-lg transition-all ${mode === (m === 'WL' ? 'WATCHLIST' : m) ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-                                >{m === 'WL' ? '★' : m}</button>
-                            ))}
-                        </div>
-                        <div className="relative group">
-                            <input 
-                                type="text"
-                                placeholder="Search markets..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-slate-700 font-medium"
-                            />
-                        </div>
-                        {mode === 'STOCKS' && (
-                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                                {Object.keys(ASSET_REGISTRY.STOCKS).map(cat => (
-                                    <button 
-                                        key={cat}
-                                        onClick={() => setStockTab(cat)}
-                                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${stockTab === cat ? 'bg-white/10 text-cyan-400 border border-cyan-400/20' : 'text-slate-500 hover:text-slate-400 border border-transparent'}`}
-                                    >{cat}</button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
-                        {loading && mode === 'CRYPTO' ? (
-                            <div className="px-4 space-y-3">
-                                {[1,2,3,4,5,6,7].map(i => <div key={i} className="h-16 skeleton rounded-2xl"></div>)}
-                            </div>
-                        ) : assets.map(asset => {
-                            const live = prices[asset.s] || { p: asset.p || '0', c: asset.c || '0' };
-                            const isUp = parseFloat(live.c) >= 0;
-                            const isActive = activeSymbol === asset.s;
-
-                            return (
-                                <div 
-                                    key={asset.s}
-                                    onClick={() => onSelect(asset.s, mode === 'CRYPTO' ? 'CRYPTO' : 'STOCK', asset.n)}
-                                    className={`asset-item px-5 py-4 cursor-pointer flex items-center justify-between group ${isActive ? 'active' : ''}`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="relative">
-                                            {mode === 'CRYPTO' ? (
-                                                <img 
-                                                    src={`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${asset.s.replace('USDT', '').toLowerCase()}.png`} 
-                                                    className="w-8 h-8 rounded-full bg-white/5"
-                                                    onError={(e) => e.target.src = 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/generic.png'}
-                                                />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-white/5 to-white/10 flex items-center justify-center text-[10px] font-bold text-slate-500 border border-white/5">{asset.s.slice(0, 2)}</div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold tracking-tight text-slate-100">{asset.s.replace('USDT', '')}</span>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); onToggleWL(asset.s); }}
-                                                    className={`text-[10px] transition-all ${watchlist.includes(asset.s) ? 'text-yellow-500 scale-125' : 'text-slate-800 opacity-0 group-hover:opacity-100 hover:text-yellow-500'}`}
-                                                >★</button>
-                                            </div>
-                                            <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest truncate w-28">{mode === 'CRYPTO' ? asset.s : asset.n}</span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className={`text-sm font-mono font-bold tracking-tighter ${isUp ? 'text-green-400' : 'text-red-400'}`}>
-                                            {Engine.formatCurrency(live.p, '', mode === 'CRYPTO' ? 2 : 2)}
-                                        </div>
-                                        <div className={`text-[10px] font-mono font-bold ${isUp ? 'text-green-500' : 'text-red-500'} opacity-80`}>
-                                            {isUp ? '+' : ''}{live.c}%
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </aside>
+              <div key={idx.key} className="idx-chip" title={idx.label}>
+                <span className="idx-name">{idx.label}</span>
+                <span className={`idx-val ${c!=null&&c>=0?'up':'dn'}`}>{v}</span>
+                {c!=null&&<span style={{fontSize:9,color:c>=0?'var(--green)':'var(--red)'}}>{c>=0?'+':''}{c.toFixed(2)}%</span>}
+              </div>
             );
-        };
+          })}
+        </div>
+      </div>
+      <div className="hdr-right">
+        <div className="live-dot"/>
+        <span>LIVE</span>
+        <span style={{marginLeft:6,fontFamily:'var(--fm)'}}>{clock}</span>
+      </div>
+    </header>
+  );
+}
 
-        const MainChart = ({ symbol, type, timeframe, setTimeframe, onData }) => {
-            const containerRef = useRef();
-            const chartRef = useRef();
-            const candleRef = useRef();
-            const volRef = useRef();
-            const [loading, setLoading] = useState(true);
+// ═══════════════════════════════════════════════════════
+// RIGHT PANEL
+// ═══════════════════════════════════════════════════════
+const TABS=[
+  {id:'tech',l:'Technical'},{id:'fund',l:'Fundamentals'},
+  {id:'news',l:'News & Video'},{id:'market',l:'Market'},
+  {id:'ai',l:'AI Insights'},{id:'tv',l:'TradingView'},
+];
 
-            const intervals = ['1m', '5m', '15m', '1h', '4h', '1D', '1W'];
+function RightPanel({symbol,type,base,ohlcv,cpx}) {
+  const [tab,setTab]=useState('tech');
+  useEffect(()=>setTab('tech'),[symbol]);
+  return (
+    <div className="right">
+      <div className="panel-hdr">
+        <div className="panel-ttl">{symbol.replace('USDT','').replace(/\.(NS|BO|L|DE|T)$/,'').replace('^','')}</div>
+        <div className="panel-sub">{type==='CRYPTO'?'Cryptocurrency · Binance':'Equity · Yahoo Finance'} · Live Analysis</div>
+      </div>
+      <div className="tabs-row">
+        {TABS.map(t=><button key={t.id} className={`tab${tab===t.id?' on':''}`} onClick={()=>setTab(t.id)}>{t.l}</button>)}
+      </div>
+      <div className="tab-body">
+        {tab==='tech'   && <TechTab   ohlcv={ohlcv}/>}
+        {tab==='fund'   && <FundTab   symbol={symbol} type={type} base={base}/>}
+        {tab==='news'   && <NewsTab   symbol={symbol} type={type} base={base}/>}
+        {tab==='market' && <MarketTab cpx={cpx}/>}
+        {tab==='ai'     && <AITab     ohlcv={ohlcv} symbol={symbol}/>}
+        {tab==='tv'     && <TVTab     symbol={symbol} type={type}/>}
+      </div>
+    </div>
+  );
+}
 
-            useEffect(() => {
-                const chart = LightweightCharts.createChart(containerRef.current, {
-                    layout: {
-                        background: { color: THEME.colors.bg },
-                        textColor: '#94a3b8',
-                        fontFamily: 'JetBrains Mono',
-                        fontSize: 11,
-                    },
-                    grid: {
-                        vertLines: { color: THEME.colors.grid },
-                        horzLines: { color: THEME.colors.grid },
-                    },
-                    crosshair: {
-                        mode: LightweightCharts.CrosshairMode.Normal,
-                        vertLine: { labelBackgroundColor: '#1e293b', width: 1, style: 2 },
-                        horzLine: { labelBackgroundColor: '#1e293b', width: 1, style: 2 },
-                    },
-                    rightPriceScale: {
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        scaleMargins: { top: 0.1, bottom: 0.2 },
-                    },
-                    timeScale: {
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        timeVisible: true,
-                    },
-                    watermark: {
-                        visible: true,
-                        fontSize: 64,
-                        horzAlign: 'center',
-                        vertAlign: 'center',
-                        color: 'rgba(255, 255, 255, 0.025)',
-                        text: symbol.replace('USDT', ''),
-                    },
-                });
+// ═══════════════════════════════════════════════════════
+// ROOT APP
+// ═══════════════════════════════════════════════════════
+function App() {
+  const [mode,setMode]     = useState('CRYPTO');
+  const [symbol,setSymbol] = useState('BTCUSDT');
+  const [type,setType]     = useState('CRYPTO');
+  const [base,setBase]     = useState('BTC');
+  const [tf,setTf]         = useState('1h');
+  const [ohlcv,setOhlcv]   = useState([]);
+  const [showVol,setShowVol]= useState(true);
+  const [showEMA,setShowEMA]= useState(false);
+  const [showBB,setShowBB]  = useState(false);
+  const [cpx,setCpx]       = useState({});
 
-                const candles = chart.addCandlestickSeries({
-                    upColor: THEME.colors.green,
-                    downColor: THEME.colors.red,
-                    borderVisible: false,
-                    wickUpColor: THEME.colors.green,
-                    wickDownColor: THEME.colors.red,
-                });
+  // Binance live ticker for all crypto
+  useEffect(()=>{
+    const unsub=bnTickerWS(updates=>setCpx(prev=>({...prev,...updates})));
+    return unsub;
+  },[]);
 
-                const volume = chart.addHistogramSeries({
-                    color: '#26a69a',
-                    priceFormat: { type: 'volume' },
-                    priceScaleId: '',
-                });
+  const onSelect=useCallback((sym,tp,name,bs)=>{
+    setSymbol(sym);setType(tp);setBase(bs);
+  },[]);
 
-                volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+  useEffect(()=>{
+    if(mode==='CRYPTO') onSelect('BTCUSDT','CRYPTO','Bitcoin','BTC');
+    else onSelect('RELIANCE.NS','STOCK','Reliance','RELIANCE');
+  },[mode]);
 
-                chartRef.current = chart;
-                candleRef.current = candles;
-                volRef.current = volume;
+  return (
+    <div className="shell">
+      <Header symbol={symbol} type={type} base={base} cpx={cpx}/>
+      <div className="body">
+        <LeftBar mode={mode} setMode={setMode} active={symbol} onSelect={onSelect} cpx={cpx}/>
+        <ChartPanel symbol={symbol} type={type} tf={tf} setTf={setTf} onData={setOhlcv}
+          showVol={showVol} setShowVol={setShowVol}
+          showEMA={showEMA} setShowEMA={setShowEMA}
+          showBB={showBB} setShowBB={setShowBB}/>
+        <RightPanel symbol={symbol} type={type} base={base} ohlcv={ohlcv} cpx={cpx}/>
+      </div>
+    </div>
+  );
+}
 
-                const onResize = () => chart.applyOptions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
-                window.addEventListener('resize', onResize);
-
-                return () => {
-                    window.removeEventListener('resize', onResize);
-                    chart.remove();
-                };
-            }, []);
-
-            useEffect(() => {
-                setLoading(true);
-                const fetchHistory = async () => {
-                    let data = [];
-                    try {
-                        // Smart multi-source fetch with fallback
-                        data = await fetchChartData(symbol, type, timeframe);
-
-                        candleRef.current.setData(data);
-                        volRef.current.setData(data.map(d => ({
-                            time: d.time,
-                            value: d.volume,
-                            color: d.close >= d.open ? 'rgba(22, 199, 132, 0.4)' : 'rgba(234, 57, 67, 0.4)'
-                        })));
-                        chartRef.current.timeScale().fitContent();
-                        onData(data);
-                    } catch (e) { console.error("History error", e); }
-                    setLoading(false);
-                };
-
-                fetchHistory();
-
-                let ws;
-                if (type === 'CRYPTO') {
-                    ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${timeframe.toLowerCase()}`);
-                    ws.onmessage = (e) => {
-                        const k = JSON.parse(e.data).k;
-                        const upd = {
-                            time: k.t / 1000,
-                            open: parseFloat(k.o),
-                            high: parseFloat(k.h),
-                            low: parseFloat(k.l),
-                            close: parseFloat(k.c)
-                        };
-                        candleRef.current.update(upd);
-                        volRef.current.update({
-                            time: k.t / 1000,
-                            value: parseFloat(k.v),
-                            color: parseFloat(k.c) >= parseFloat(k.o) ? 'rgba(22, 199, 132, 0.4)' : 'rgba(234, 57, 67, 0.4)'
-                        });
-                    };
-                }
-
-                return () => ws && ws.close();
-            }, [symbol, type, timeframe]);
-
-            return (
-                <section className="flex-1 flex flex-col relative bg-black/10">
-                    <div className="h-12 glass border-b border-white/5 flex items-center justify-between px-6 bg-white/[0.02]">
-                        <div className="flex items-center gap-1.5">
-                            {intervals.map(tf => (
-                                <button 
-                                    key={tf}
-                                    onClick={() => setTimeframe(tf)}
-                                    className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${timeframe === tf ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-400/20' : 'text-slate-500 hover:text-slate-300 border border-transparent'}`}
-                                >{tf}</button>
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-5 text-slate-500">
-                            <button className="hover:text-white transition-colors" data-title="Indicators"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></button>
-                            <button className="hover:text-white transition-colors" data-title="Snap Alert"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></button>
-                        </div>
-                    </div>
-                    <div ref={containerRef} className="flex-1 w-full" />
-                    {loading && (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-50">
-                            <div className="flex flex-col items-center gap-5">
-                                <div className="w-14 h-14 border-4 border-cyan-500/10 border-t-cyan-500 rounded-full animate-spin shadow-xl shadow-cyan-500/10"></div>
-                                <div className="flex flex-col items-center">
-                                    <span className="text-sm font-bold text-cyan-400 tracking-[0.3em] animate-pulse">RECONSTRUCTING DATA</span>
-                                    <span className="text-[10px] text-slate-500 font-bold uppercase mt-1">Institutional Feed Latency: 12ms</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </section>
-            );
-        };
-
-        const AnalysisPanel = ({ symbol, type, ohlcv, prices }) => {
-            const [tab, setTab] = useState('TECH');
-            const tabs = [
-                { id: 'TECH', label: 'Tech', icon: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z' },
-                { id: 'FUND', label: 'Fund', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z' },
-                { id: 'NEWS', label: 'News', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z' },
-                { id: 'MARKET', label: 'Market', icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z' },
-                { id: 'INSIGHT', label: 'AI', icon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z' },
-                { id: 'TV', label: 'TV', icon: 'M3 3h18v18H3V3z' },
-            ];
-
-            return (
-                <section className="glass border-l border-white/5 flex flex-col overflow-hidden">
-                    <nav className="flex border-b border-white/5 bg-black/20">
-                        {tabs.map(t => (
-                            <button 
-                                key={t.id}
-                                onClick={() => setTab(t.id)}
-                                className={`flex-1 py-4 flex flex-col items-center gap-1.5 transition-all relative group ${tab === t.id ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d={t.icon}/></svg>
-                                <span className="text-[9px] font-bold uppercase tracking-widest">{t.label}</span>
-                                {tab === t.id && <div className="tab-indicator" />}
-                            </button>
-                        ))}
-                    </nav>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                        {tab === 'TECH' && <TechnicalView ohlcv={ohlcv} />}
-                        {tab === 'FUND' && <FundamentalsView symbol={symbol} type={type} />}
-                        {tab === 'NEWS' && <NewsView symbol={symbol} type={type} />}
-                        {tab === 'MARKET' && <MarketOverview type={type} prices={prices || {}} />}
-                        {tab === 'INSIGHT' && <AIView ohlcv={ohlcv} symbol={symbol} />}
-                        {tab === 'TV' && <TVWidget symbol={symbol} />}
-                    </div>
-                </section>
-            );
-        };
-
-        const TechnicalView = ({ ohlcv }) => {
-            if (!ohlcv || ohlcv.length < 50) return <div className="space-y-4">
-                {[1,2,3,4].map(i => <div key={i} className="h-24 skeleton rounded-2xl"></div>)}
-            </div>;
-
-            const c = ohlcv.map(d => d.close);
-            const rsi = Indicators.rsi(c).pop();
-            const macd = Indicators.macd(c);
-            const bb = Indicators.bollinger(c).pop();
-            const ema20 = Indicators.ema(c, 20).pop();
-            const ema50 = Indicators.ema(c, 50).pop();
-            const last = c[c.length - 1];
-
-            const biasScore = (rsi < 40 ? 1 : rsi > 60 ? -1 : 0) + (last > ema20 ? 1 : -1) + (macd.hist.pop() > 0 ? 1 : -1);
-            const bias = biasScore > 1 ? 'Bullish' : biasScore < -1 ? 'Bearish' : 'Neutral';
-
-            return (
-                <div className="space-y-8">
-                    <div className="p-6 bg-white/5 rounded-3xl border border-white/10 relative overflow-hidden group hover:bg-white/[0.08] transition-all">
-                        <div className="absolute -right-6 -bottom-6 text-white/5 group-hover:text-cyan-400/10 transition-colors"><svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-                        <div className="flex justify-between items-center mb-6">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Bias Engine V2</span>
-                            <span className={`badge-base ${bias === 'Bullish' ? 'badge-buy' : bias === 'Bearish' ? 'badge-sell' : 'badge-hold'}`}>{bias}</span>
-                        </div>
-                        <div className="space-y-6">
-                            <div>
-                                <div className="flex justify-between text-[11px] mb-2 px-1">
-                                    <span className="text-slate-400 font-bold uppercase tracking-tighter">Relative Strength (14)</span>
-                                    <span className={`font-mono font-bold ${rsi > 70 ? 'text-red-400' : rsi < 30 ? 'text-green-400' : 'text-cyan-400'}`}>{rsi.toFixed(2)}</span>
-                                </div>
-                                <div className="gauge-bg">
-                                    <div className="gauge-fill bg-gradient-to-r from-green-500 via-cyan-400 to-red-500" style={{ width: `${rsi}%` }}></div>
-                                    <div className="absolute inset-y-0 left-[30%] w-px bg-white/20"></div>
-                                    <div className="absolute inset-y-0 left-[70%] w-px bg-white/20"></div>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <TechDataBox label="MACD Hist" val={macd.hist.pop().toFixed(4)} color={macd.hist.pop() > 0 ? 'text-green-400' : 'text-red-400'} />
-                                <TechDataBox label="Vol / Avg" val="1.4x" color="text-violet-400" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">Trend Corridors</h4>
-                        <div className="space-y-2">
-                            <TechLine label="EMA 20" val={Engine.formatCurrency(ema20, '', 2)} up={last > ema20} />
-                            <TechLine label="EMA 50" val={Engine.formatCurrency(ema50, '', 2)} up={last > ema50} />
-                            <TechLine label="BB Upper" val={Engine.formatCurrency(bb.upper, '', 2)} up={last < bb.upper} />
-                            <TechLine label="BB Lower" val={Engine.formatCurrency(bb.lower, '', 2)} up={last > bb.lower} />
-                        </div>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-1">Liquidity Levels</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-red-500/5 rounded-2xl border border-red-500/10">
-                                <span className="text-[10px] text-red-400/60 font-bold uppercase block mb-1">Resistance</span>
-                                <span className="text-sm font-mono font-bold text-red-500">{Engine.formatCurrency(Math.max(...ohlcv.slice(-20).map(d=>d.high)), '', 2)}</span>
-                            </div>
-                            <div className="p-4 bg-green-500/5 rounded-2xl border border-green-500/10">
-                                <span className="text-[10px] text-green-400/60 font-bold uppercase block mb-1">Support</span>
-                                <span className="text-sm font-mono font-bold text-green-500">{Engine.formatCurrency(Math.min(...ohlcv.slice(-20).map(d=>d.low)), '', 2)}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const TechDataBox = ({ label, val, color }) => (
-            <div className="p-3 bg-black/40 rounded-xl border border-white/5">
-                <span className="text-[9px] text-slate-600 font-bold uppercase block mb-1 tracking-wider">{label}</span>
-                <span className={`text-xs font-mono font-bold ${color}`}>{val}</span>
-            </div>
-        );
-
-        const TechLine = ({ label, val, up }) => (
-            <div className="flex justify-between items-center p-3.5 bg-white/5 rounded-2xl border border-transparent hover:border-white/10 transition-all group">
-                <div className="flex items-center gap-3">
-                    <div className={`w-1.5 h-1.5 rounded-full ${up ? 'bg-green-400 shadow-[0_0_8px_var(--green)]' : 'bg-red-400 shadow-[0_0_8px_var(--red)]'}`}></div>
-                    <span className="text-xs font-bold text-slate-400 group-hover:text-slate-200">{label}</span>
-                </div>
-                <span className="text-xs font-mono font-bold text-slate-500">{val}</span>
-            </div>
-        );
-
-        const FundamentalsView = ({ symbol, type }) => {
-            const [data, setData] = useState(null);
-            const [load, setLoad] = useState(true);
-
-            useEffect(() => {
-                setLoad(true);
-                const fetcher = async () => {
-                    try {
-                        if (type === 'CRYPTO') {
-                            const res = await fetch(`https://api.coingecko.com/api/v3/coins/${symbol.replace('USDT', '').toLowerCase()}?localization=false&tickers=false&sparkline=false`);
-                            const j = await res.json();
-                            setData({
-                                mc: j.market_data.market_cap.usd,
-                                fdv: j.market_data.fully_diluted_valuation.usd,
-                                supply: j.market_data.circulating_supply,
-                                total: j.market_data.total_supply,
-                                rank: j.market_cap_rank,
-                                ath: j.market_data.ath.usd,
-                                desc: j.description.en.split('. ').slice(0, 3).join('. ') + '.',
-                                link: j.links.homepage[0]
-                            });
-                        } else {
-                            const d = await yahooFundamentals(symbol);
-                            setData({
-                                mc: d.marketCap,
-                                pe: d.pe,
-                                forwardPE: d.forwardPE,
-                                eps: d.eps,
-                                revenue: d.revenue,
-                                grossMargin: d.grossMargin,
-                                margin: d.profitMargin,
-                                div: d.dividendYield,
-                                beta: d.beta,
-                                sector: d.sector,
-                                industry: d.industry,
-                                high52w: d.high52w,
-                                low52w: d.low52w,
-                                avg50: d.avg50,
-                                avg200: d.avg200,
-                                roe: d.roe,
-                                debtToEquity: d.debtToEquity,
-                                freeCashFlow: d.freeCashFlow,
-                                priceToBook: d.priceToBook,
-                                targetMean: d.targetMean,
-                                recommendation: d.recommendation,
-                                numAnalysts: d.numAnalysts,
-                                employees: d.employees,
-                                country: d.country,
-                                website: d.website,
-                                description: d.description,
-                                name: d.name,
-                                exchange: d.exchange,
-                                currency: d.currency,
-                            });
-                        }
-                    } catch (e) { console.error(e); }
-                    setLoad(false);
-                };
-                fetcher();
-            }, [symbol]);
-
-            if (load) return <div className="space-y-4">{[1,2,3,4,5,6].map(i => <div key={i} className="h-16 skeleton rounded-2xl"></div>)}</div>;
-            if (!data) return <div className="text-slate-600 text-center py-20 italic">Data Access Denied</div>;
-
-            return (
-                <div className="space-y-5">
-                    <div className="grid grid-cols-1 gap-3">
-                        <FundMetric label="Valuation" val={Engine.formatCompact(data.mc)} prefix="$" />
-                        {type === 'CRYPTO' ? (
-                            <>
-                                <FundMetric label="Network Rank" val={data.rank} prefix="#" />
-                                <FundMetric label="ATH Level" val={Engine.formatCurrency(data.ath)} />
-                                <FundMetric label="Circ. Supply" val={Engine.formatCompact(data.supply)} />
-                                <div className="p-6 bg-white/5 rounded-3xl border border-white/5 mt-2">
-                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest block mb-3">Intelligence Summary</span>
-                                    <p className="text-xs text-slate-400 leading-relaxed font-medium">{data.desc}</p>
-                                    <a href={data.link} target="_blank" className="text-[10px] text-cyan-400 font-bold uppercase mt-6 block hover:text-cyan-300 transition-colors">Project Ecosystem →</a>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="p-4 bg-violet-500/10 border border-violet-500/20 rounded-2xl mb-1">
-                                    <div className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mb-2">Company</div>
-                                    <div className="text-sm font-bold text-slate-200">{data.name || symbol}</div>
-                                    <div className="text-[11px] text-slate-500 mt-1">{data.exchange} · {data.sector} · {data.country}</div>
-                                    {data.website && <a href={data.website} target="_blank" className="text-[10px] text-cyan-400 mt-2 block hover:underline">{data.website.replace('https://','')}</a>}
-                                </div>
-
-                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Valuation</div>
-                                <FundMetric label="Market Cap" val={Engine.formatCompact(data.mc)} prefix="$" />
-                                <FundMetric label="P/E Ratio (TTM)" val={data.pe?.toFixed(2) || 'N/A'} color={!data.pe ? 'text-slate-500' : data.pe > 50 ? 'text-yellow-400' : data.pe < 15 ? 'text-green-400' : 'text-slate-200'} />
-                                <FundMetric label="Forward P/E" val={data.forwardPE?.toFixed(2) || 'N/A'} />
-                                <FundMetric label="P/B Ratio" val={data.priceToBook?.toFixed(2) || 'N/A'} color={data.priceToBook < 1 ? 'text-green-400' : 'text-slate-200'} />
-                                <FundMetric label="EPS (TTM)" val={data.eps ? `$${data.eps.toFixed(2)}` : 'N/A'} color={data.eps > 0 ? 'text-green-400' : 'text-red-400'} />
-
-                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Financials</div>
-                                <FundMetric label="Revenue" val={Engine.formatCompact(data.revenue)} prefix="$" />
-                                <FundMetric label="Free Cash Flow" val={Engine.formatCompact(data.freeCashFlow)} prefix="$" color={data.freeCashFlow > 0 ? 'text-green-400' : 'text-red-400'} />
-                                <FundMetric label="Profit Margin" val={data.margin ? (data.margin * 100).toFixed(1) + '%' : 'N/A'} color={data.margin > 0.2 ? 'text-green-400' : data.margin > 0.1 ? 'text-cyan-400' : 'text-yellow-400'} />
-                                <FundMetric label="Gross Margin" val={data.grossMargin ? (data.grossMargin * 100).toFixed(1) + '%' : 'N/A'} color={data.grossMargin > 0.4 ? 'text-green-400' : 'text-slate-200'} />
-                                <FundMetric label="ROE" val={data.roe ? (data.roe * 100).toFixed(1) + '%' : 'N/A'} color={data.roe > 0.15 ? 'text-green-400' : 'text-slate-200'} />
-                                <FundMetric label="Debt/Equity" val={data.debtToEquity?.toFixed(2) || 'N/A'} color={data.debtToEquity > 2 ? 'text-red-400' : data.debtToEquity > 1 ? 'text-yellow-400' : 'text-green-400'} />
-
-                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Price Levels</div>
-                                <FundMetric label="52W High" val={data.high52w ? `$${data.high52w.toFixed(2)}` : 'N/A'} color="text-green-400" />
-                                <FundMetric label="52W Low" val={data.low52w ? `$${data.low52w.toFixed(2)}` : 'N/A'} color="text-red-400" />
-                                <FundMetric label="50D MA" val={data.avg50 ? `$${data.avg50.toFixed(2)}` : 'N/A'} />
-                                <FundMetric label="200D MA" val={data.avg200 ? `$${data.avg200.toFixed(2)}` : 'N/A'} />
-                                <FundMetric label="Beta" val={data.beta?.toFixed(2) || 'N/A'} color={data.beta > 1.5 ? 'text-yellow-400' : 'text-slate-200'} />
-
-                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-3 mb-1 px-1">Dividends & Analyst</div>
-                                <FundMetric label="Dividend Yield" val={data.div ? (data.div * 100).toFixed(2) + '%' : '—'} color={data.div > 0.03 ? 'text-green-400' : 'text-slate-400'} />
-                                {data.numAnalysts > 0 && <>
-                                    <FundMetric label="Analyst Target" val={data.targetMean ? `$${data.targetMean.toFixed(2)}` : 'N/A'} color="text-cyan-400" />
-                                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">Consensus ({data.numAnalysts} analysts)</div>
-                                        <div className={`text-sm font-bold uppercase ${data.recommendation === 'buy' || data.recommendation === 'strong_buy' ? 'text-green-400' : data.recommendation === 'sell' || data.recommendation === 'strong_sell' ? 'text-red-400' : 'text-yellow-400'}`}>
-                                            {(data.recommendation || 'N/A').replace('_', ' ')}
-                                        </div>
-                                        <div className="text-[10px] text-slate-600 mt-1">Range: ${data.targetLow?.toFixed(0)} – ${data.targetHigh?.toFixed(0)}</div>
-                                    </div>
-                                </>}
-                                <FundMetric label="Employees" val={data.employees ? data.employees.toLocaleString() : 'N/A'} />
-
-                                {data.description && (
-                                    <div className="p-5 bg-white/5 rounded-3xl border border-white/5 mt-2">
-                                        <span className="text-[10px] text-slate-500 font-bold uppercase block mb-3 tracking-widest">About</span>
-                                        <p className="text-xs text-slate-400 leading-relaxed">{data.description}</p>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        const FundMetric = ({ label, val, prefix = '', color = 'text-slate-200' }) => (
-            <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-white/10 transition-all group">
-                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest group-hover:text-slate-400">{label}</span>
-                <span className={`text-sm font-mono font-bold ${color}`}>{prefix}{val}</span>
-            </div>
-        );
-
-        const NewsView = ({ symbol, type }) => {
-            const [news, setNews] = useState([]);
-            const [load, setLoad] = useState(true);
-
-            useEffect(() => {
-                const fetchN = async () => {
-                    setLoad(true);
-                    try {
-                        if (type === 'CRYPTO') {
-                            const base = symbol.replace('USDT', '');
-                            let newsItems = [];
-                            try {
-                                const j = await cpNews(base);
-                                newsItems = j.results.map(n => ({
-                                    t: n.title, s: n.source.title, u: n.url, d: n.created_at,
-                                    sent: n.votes.positive > n.votes.negative ? 'Bullish' : n.votes.negative > n.votes.positive ? 'Bearish' : 'Neutral'
-                                }));
-                            } catch (e) {
-                                // Fallback: Yahoo Finance crypto news
-                                newsItems = await yahooNews(base + '-USD');
-                                newsItems = newsItems.map(n => ({ t: n.title, s: n.source, u: n.link, d: n.pubDate, sent: n.sentiment }));
-                            }
-                            setNews(newsItems);
-                        } else {
-                            const items = await yahooNews(symbol);
-                            setNews(items.map(n => ({
-                                t: n.title, s: n.source, u: n.link, d: n.pubDate, sent: n.sentiment
-                            })));
-                        }
-                    } catch (e) { console.error(e); }
-                    setLoad(false);
-                };
-                fetchN();
-            }, [symbol]);
-
-            if (load) return <div className="space-y-4">{[1,2,3,4].map(i => <div key={i} className="h-24 skeleton rounded-2xl"></div>)}</div>;
-
-            return (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between p-5 bg-white/5 rounded-3xl border border-white/10 mb-2">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Sentiment Pulse</span>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Weighted: Bullish</span>
-                            <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <div className="h-full bg-green-400" style={{ width: '82%' }}></div>
-                            </div>
-                        </div>
-                    </div>
-                    {news.map((n, idx) => (
-                        <a key={idx} href={n.u} target="_blank" className="block p-5 bg-white/5 border border-white/5 rounded-3xl hover:bg-white/[0.08] transition-all group relative overflow-hidden">
-                            <div className="flex justify-between items-start mb-4">
-                                <span className="text-[10px] text-cyan-400/70 font-bold uppercase tracking-widest">{n.s}</span>
-                                <span className={`badge-base ${n.sent === 'Bullish' ? 'badge-buy' : 'badge-hold'}`}>{n.sent}</span>
-                            </div>
-                            <h4 className="text-[13px] font-bold text-slate-200 leading-snug group-hover:text-white line-clamp-2 mb-4">{n.t}</h4>
-                            <div className="flex items-center justify-between text-[9px] text-slate-600 font-bold uppercase">
-                                <span>{Engine.timeAgo(n.d)} ago</span>
-                                <span className="text-cyan-500/40 group-hover:text-cyan-400 transition-colors">Access Insight →</span>
-                            </div>
-                        </a>
-                    ))}
-                </div>
-            );
-        };
-
-        const AIView = ({ ohlcv, symbol }) => {
-            const ai = useMemo(() => {
-                if (!ohlcv || ohlcv.length < 50) return null;
-                const last = ohlcv[ohlcv.length - 1];
-                const c = ohlcv.map(d => d.close);
-                const rsi = Indicators.rsi(c).pop();
-                const ema20 = Indicators.ema(c, 20).pop();
-                const patterns = PatternEngine.scan(ohlcv);
-                
-                const tr = last.close > ema20 ? 'Bullish' : 'Bearish';
-                const mo = rsi > 50 ? 'Expansion' : 'Contraction';
-                
-                return { rsi: rsi.toFixed(2), tr, mo, patterns };
-            }, [ohlcv]);
-
-            if (!ai) return <div className="text-slate-600 italic text-center py-20 animate-pulse">Initializing Neural Core...</div>;
-
-            return (
-                <div className="space-y-8">
-                    <div className="p-7 bg-gradient-to-br from-violet-600/20 to-cyan-500/20 rounded-3xl border border-white/10 relative overflow-hidden shimmer">
-                        <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-400/5 blur-3xl -mr-20 -mt-20"></div>
-                        <div className="flex items-center gap-3 mb-5">
-                            <div className="w-9 h-9 rounded-xl bg-cyan-400 flex items-center justify-center text-black shadow-lg shadow-cyan-400/20">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                            </div>
-                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-[0.2em]">Nexus Neural Matrix</span>
-                        </div>
-                        <p className="text-[14px] font-medium text-slate-200 leading-relaxed italic opacity-90">
-                            "System analysis for {symbol} confirms a <span className="text-white font-extrabold">{ai.tr}</span> structural bias. Volatility is in a state of <span className="text-white">{ai.mo}</span> with RSI stabilizing at <span className="text-white">{ai.rsi}</span>. Pattern recognition engines have flagged high-probability setups."
-                        </p>
-                    </div>
-
-                    <div className="space-y-4">
-                        <h5 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Pattern Detections</h5>
-                        <div className="flex flex-wrap gap-2.5">
-                            {ai.patterns.length > 0 ? ai.patterns.map((p,i) => (
-                                <span key={i} className={`badge-base ${p.type === 'Bullish' ? 'badge-buy' : p.type === 'Bearish' ? 'badge-sell' : 'badge-hold'}`}>{p.name}</span>
-                            )) : <span className="text-xs text-slate-600 italic px-1">No structural anomalies detected</span>}
-                        </div>
-                    </div>
-
-                    <div className="space-y-5">
-                        <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
-                            <h5 className="text-[10px] font-bold text-slate-600 uppercase mb-4 tracking-widest">Calculated Strategy</h5>
-                            <div className="space-y-4">
-                                <AIStep label="ENTRY" val={ai.tr === 'Bullish' ? "Accumulate on pullbacks to EMA-20" : "Short on rejected EMA-20 retests"} />
-                                <AIStep label="RISK" val="Invalidation level set at recent daily low" />
-                                <AIStep label="TP-1" val="Next psychological round number level" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="pt-8 text-[9px] text-slate-700 font-extrabold uppercase tracking-tight text-center max-w-[220px] mx-auto leading-relaxed">
-                        Nexus AI algorithms are experimental. Past performance does not guarantee results.
-                    </div>
-                </div>
-            );
-        };
-
-        const AIStep = ({ label, val }) => (
-            <div className="flex gap-4">
-                <span className="text-[10px] font-bold text-cyan-400/50 min-w-[50px] uppercase tracking-tighter">{label}</span>
-                <span className="text-xs font-bold text-slate-300 tracking-tight">{val}</span>
-            </div>
-        );
-
-        const MarketOverview = ({ type, prices }) => {
-            const [global, setGlobal] = useState(null);
-            const [fg, setFg] = useState(null);
-            const [trending, setTrending] = useState([]);
-            const [load, setLoad] = useState(true);
-
-            useEffect(() => {
-                const fetchAll = async () => {
-                    setLoad(true);
-                    try {
-                        const [gl, fgData, tr] = await Promise.allSettled([
-                            cgGlobal(), fearGreed(), cgTrending()
-                        ]);
-                        if (gl.status === 'fulfilled') setGlobal(gl.value.data);
-                        if (fgData.status === 'fulfilled') setFg(fgData.value);
-                        if (tr.status === 'fulfilled') setTrending(tr.value.coins?.slice(0, 8) || []);
-                    } catch(e) { console.error(e); }
-                    setLoad(false);
-                };
-                fetchAll();
-            }, []);
-
-            // Gainers/Losers from prices
-            const sorted = Object.entries(prices)
-                .map(([sym, d]) => ({ sym, c: parseFloat(d.c) }))
-                .filter(x => !isNaN(x.c))
-                .sort((a, b) => b.c - a.c);
-            const gainers = sorted.slice(0, 5);
-            const losers = sorted.slice(-5).reverse();
-
-            const fgValue = fg ? parseInt(fg.value) : null;
-            const fgColor = fgValue < 25 ? '#ea3943' : fgValue < 45 ? '#f97316' : fgValue < 55 ? '#eab308' : fgValue < 75 ? '#22d3ee' : '#16c784';
-            const fgLabel = fg?.value_classification || '—';
-
-            return (
-                <div className="space-y-5">
-                    {load ? (
-                        <div className="space-y-3">{[1,2,3,4].map(i=><div key={i} className="h-16 skeleton rounded-2xl"/>)}</div>
-                    ) : (<>
-                        {fg && (
-                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Fear & Greed Index</div>
-                                <div className="flex items-center justify-between">
-                                    <span style={{color: fgColor}} className="text-3xl font-black font-mono">{fg.value}</span>
-                                    <span style={{color: fgColor}} className="text-sm font-bold uppercase">{fgLabel}</span>
-                                </div>
-                                <div className="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full transition-all" style={{width: fg.value + '%', background: fgColor}}/>
-                                </div>
-                                <div className="flex justify-between text-[9px] text-slate-600 mt-1">
-                                    <span>Extreme Fear</span><span>Extreme Greed</span>
-                                </div>
-                            </div>
-                        )}
-                        {global && (
-                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10 space-y-3">
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global Crypto Market</div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div><div className="text-[10px] text-slate-600">Market Cap</div><div className="text-sm font-bold font-mono text-cyan-400">${Engine.formatCompact(global.total_market_cap?.usd)}</div></div>
-                                    <div><div className="text-[10px] text-slate-600">24h Volume</div><div className="text-sm font-bold font-mono">${Engine.formatCompact(global.total_volume?.usd)}</div></div>
-                                    <div><div className="text-[10px] text-slate-600">BTC Dominance</div><div className="text-sm font-bold font-mono text-yellow-400">{global.market_cap_percentage?.btc?.toFixed(1)}%</div></div>
-                                    <div><div className="text-[10px] text-slate-600">Active Coins</div><div className="text-sm font-bold font-mono">{global.active_cryptocurrencies?.toLocaleString()}</div></div>
-                                </div>
-                                <div>
-                                    <div className="text-[9px] text-slate-600 mb-1">Market Cap Change 24h</div>
-                                    <span className={`text-sm font-bold ${global.market_cap_change_percentage_24h_usd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {global.market_cap_change_percentage_24h_usd?.toFixed(2)}%
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-                        <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Gainers (24h)</div>
-                            <div className="space-y-2">
-                                {gainers.map(g => (
-                                    <div key={g.sym} className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-400">{g.sym.replace('USDT','')}</span>
-                                        <span className="text-xs font-bold font-mono text-green-400">+{g.c.toFixed(2)}%</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Top Losers (24h)</div>
-                            <div className="space-y-2">
-                                {losers.map(g => (
-                                    <div key={g.sym} className="flex justify-between items-center">
-                                        <span className="text-xs font-bold text-slate-400">{g.sym.replace('USDT','')}</span>
-                                        <span className="text-xs font-bold font-mono text-red-400">{g.c.toFixed(2)}%</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        {trending.length > 0 && (
-                            <div className="p-5 bg-white/5 rounded-3xl border border-white/10">
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Trending on CoinGecko</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {trending.map((t, i) => (
-                                        <span key={i} className="text-[11px] px-3 py-1 bg-violet-500/10 border border-violet-500/20 rounded-full text-violet-400 font-bold">
-                                            #{i+1} {t.item?.symbol}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>)}
-                </div>
-            );
-        };
-
-        const TVWidget = ({ symbol }) => {
-            const sym = symbol.includes('USDT') ? `BINANCE:${symbol}` : symbol.replace('.NS', '').replace('.BO', '');
-            return (
-                <div className="h-full min-h-[550px] w-full bg-black/40 rounded-3xl overflow-hidden border border-white/10 tv-widget-container">
-                    <iframe 
-                        src={`https://www.tradingview.com/widgetbar-chart/?symbol=${sym}&theme=dark`}
-                        className="w-full h-full"
-                    />
-                </div>
-            );
-        };
-
-        // --- ROOT ORCHESTRATOR ---
-
-        const App = () => {
-            const [activeS, setActiveS] = useState('BTCUSDT');
-            const [activeA, setActiveA] = useState({ symbol: 'BTCUSDT', type: 'CRYPTO', name: 'Bitcoin' });
-            const [prices, setPrices] = useState({});
-            const [watchlist, setWatchlist] = useState(JSON.parse(localStorage.getItem('nexus_wl_v2') || '[]'));
-            const [ohlcv, setOhlcv] = useState([]);
-            const [timeframe, setTimeframe] = useState('1h');
-            const [clock, setClock] = useState('');
-
-            useEffect(() => {
-                const t = setInterval(() => {
-                    setClock(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
-                }, 1000);
-                return () => clearInterval(t);
-            }, []);
-
-            useEffect(() => {
-                const ws = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
-                ws.onmessage = (e) => {
-                    const data = JSON.parse(e.data);
-                    const ups = {};
-                    data.forEach(d => {
-                        if (d.s.endsWith('USDT')) {
-                            ups[d.s] = {
-                                p: d.c,
-                                c: ((parseFloat(d.c) - parseFloat(d.o)) / parseFloat(d.o) * 100).toFixed(2),
-                                h: d.h, l: d.l, v: d.q
-                            };
-                        }
-                    });
-                    setPrices(prev => ({ ...prev, ...ups }));
-                };
-                return () => ws.close();
-            }, []);
-
-            const onSelect = (s, type, name) => {
-                setActiveS(s);
-                setActiveA({ symbol: s, type, name });
-            };
-
-            const toggleWL = (s) => {
-                const next = watchlist.includes(s) ? watchlist.filter(x => x !== s) : [...watchlist, s];
-                setWatchlist(next);
-                localStorage.setItem('nexus_wl_v2', JSON.stringify(next));
-            };
-
-            useEffect(() => {
-                const k = (e) => {
-                    if (e.key === '/') { e.preventDefault(); document.querySelector('input')?.focus(); }
-                };
-                window.addEventListener('keydown', k);
-                return () => window.removeEventListener('keydown', k);
-            }, []);
-
-            return (
-                <div className="terminal-shell">
-                    <Header symbol={activeS} asset={activeA} prices={prices} clock={clock} />
-                    <main className="workspace-grid">
-                        <Sidebar onSelect={onSelect} activeSymbol={activeS} prices={prices} watchlist={watchlist} onToggleWL={toggleWL} />
-                        <MainChart symbol={activeS} type={activeA.type} timeframe={timeframe} setTimeframe={setTimeframe} onData={setOhlcv} />
-                        <div className="analysis-bar">
-                            <AnalysisPanel symbol={activeS} type={activeA.type} ohlcv={ohlcv} prices={prices} />
-                        </div>
-                    </main>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('nexus-root'));
-        root.render(<App />);
-    </script>
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
 </body>
 </html>
