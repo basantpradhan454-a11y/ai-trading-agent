@@ -557,59 +557,17 @@ def page_auth():
         </div>
         """, unsafe_allow_html=True)
 
-        tab_in, tab_up, tab_demo = st.tabs(["Sign In", "Create Account", "Demo Access"])
-        with tab_in:
-            with st.form("form_login", clear_on_submit=False):
-                li_email = st.text_input("Email", placeholder="you@example.com", key="li_email")
-                password = st.text_input("Password", placeholder="Enter password", type="password", key="li_pw")
-                submit = st.form_submit_button("Sign In", use_container_width=True)
-                if submit:
-                    if not li_email or not password:
-                        st.error("Email and password required.")
-                    else:
-                        db = SessionLocal()
-                        user = db.query(User).filter_by(email=li_email).first()
-                        if user and verify_pw(password, user.password_hash):
-                            st.session_state["user"] = {"id": user.id, "email": user.email, "name": user.full_name or "Trader", "strategy": user.strategy or "Balanced"}
-                            db.close()
-                            st.rerun()
-                        else:
-                            db.close()
-                            st.error("Invalid email or password.")
-        with tab_up:
-            with st.form("form_signup", clear_on_submit=False):
-                full_name = st.text_input("Full Name", placeholder="Your name", key="su_name")
-                su_email = st.text_input("Email", placeholder="you@example.com", key="su_email")
-                su_pw = st.text_input("Password", placeholder="Min 8 characters", type="password", key="su_pw")
-                su_pw2 = st.text_input("Confirm Password", placeholder="Repeat", type="password", key="su_pw2")
-                strategy = st.selectbox("Trading Strategy", ["Balanced", "Conservative", "Aggressive"], key="su_strat")
-                register = st.form_submit_button("Create Account", use_container_width=True)
-                if register:
-                    errs = []
-                    if not full_name: errs.append("Full name required.")
-                    if not su_email or "@" not in su_email: errs.append("Valid email required.")
-                    if len(su_pw) < 8: errs.append("Password must be 8+ characters.")
-                    if su_pw != su_pw2: errs.append("Passwords don't match.")
-                    if errs:
-                        for e in errs: st.error(e)
-                    else:
-                        try:
-                            db = SessionLocal()
-                            if db.query(User).filter_by(email=su_email).first():
-                                st.error("Account already exists. Try signing in instead.")
-                            else:
-                                user = User(email=su_email, password_hash=hash_pw(su_pw), full_name=full_name, strategy=strategy)
-                                db.add(user); db.commit()
-                                st.session_state["user"] = {"id": user.id, "email": su_email, "name": full_name, "strategy": strategy}
-                                st.rerun()
-                            db.close()
-                        except Exception as e:
-                            st.error(f"Signup error: {str(e)}")
-        with tab_demo:
-            st.markdown("<div style='text-align:center; padding:20px; color:#8b93a7; font-size:14px;'>Quick demo access — no account needed. Explore all features instantly.</div>", unsafe_allow_html=True)
-            if st.button("🚀 Enter Demo Mode", use_container_width=True, key="demo_btn"):
-                st.session_state["user"] = {"id": "demo", "email": "demo@finsage.ai", "name": "Demo Trader", "strategy": "Balanced"}
-                st.rerun()
+        with st.form("form_login", clear_on_submit=False):
+            password = st.text_input("Enter Access Password", placeholder="Enter password", type="password", key="li_pw")
+            submit = st.form_submit_button("Unlock FinsageAI", use_container_width=True)
+            if submit:
+                if not password:
+                    st.error("Password required.")
+                elif password == ACCESS_PASSWORD:
+                    st.session_state["user"] = {"id": "admin", "email": "admin@finsage.ai", "name": "Trader", "strategy": "Balanced"}
+                    st.rerun()
+                else:
+                    st.error("Wrong password. Access denied.")
 
 # ── Sidebar ──
 def render_sidebar():
