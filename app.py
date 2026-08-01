@@ -249,6 +249,16 @@ div[data-testid="stMetricValue"] {
     font-family: 'JetBrains Mono', monospace !important;
     color: var(--text) !important;
 }
+
+/* ── Hide Streamlit Default UI (star, edit, GitHub, 3-dots menu) ── */
+header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; }
+#MainMenu { display: none !important; visibility: hidden !important; }
+footer { display: none !important; visibility: hidden !important; }
+[data-testid="stToolbar"] { display: none !important; }
+.stDeployButton { display: none !important; }
+div[data-testid="stSidebarCollapseButton"] { display: none !important; }
+#stAppToolbar { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -497,6 +507,11 @@ def fetch_youtube_videos(query, limit=8):
         return vids
     except: return []
 
+
+def base_asset(symbol):
+    """Extract base asset name from trading pair (e.g. BTCUSDT -> BTC)"""
+    return symbol.replace('USDT', '').replace('BTC', 'BTC') if 'USDT' in symbol else symbol
+
 # ── Chart ──
 def build_chart(df, symbol, is_crypto=True):
     fig = go.Figure(data=[go.Candlestick(
@@ -524,7 +539,9 @@ def build_chart(df, symbol, is_crypto=True):
     )
     return fig
 
-# ── Auth Page ──
+# ── Auth Page (Password Gate) ──
+ACCESS_PASSWORD = "dinesh123"
+
 def page_auth():
     st.markdown("<div style='height:8vh'></div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -543,22 +560,16 @@ def page_auth():
         tab_in, tab_up = st.tabs(["Sign In", "Create Account"])
         with tab_in:
             with st.form("form_login", clear_on_submit=False):
-                email = st.text_input("Email", placeholder="you@example.com", key="li_email")
-                password = st.text_input("Password", placeholder="Enter password", type="password", key="li_pw")
+                password = st.text_input("Enter Access Password", placeholder="Enter password", type="password", key="li_pw")
                 submit = st.form_submit_button("Sign In", use_container_width=True)
                 if submit:
-                    if not email or not password:
-                        st.error("Both fields required.")
+                    if not password:
+                        st.error("Password required.")
+                    elif password == ACCESS_PASSWORD:
+                        st.session_state["user"] = {"id": "admin", "email": "admin@nexus.local", "name": "Trader", "strategy": "Balanced"}
+                        st.rerun()
                     else:
-                        db = SessionLocal()
-                        user = db.query(User).filter_by(email=email).first()
-                        if user and verify_pw(password, user.password_hash):
-                            st.session_state["user"] = {"id": user.id, "email": user.email, "name": user.full_name, "strategy": user.strategy}
-                            st.rerun()
-                        else:
-                            st.error("Invalid email or password.")
-                        db.close()
-
+                        st.error("Wrong password. Access denied.")
         with tab_up:
             with st.form("form_signup", clear_on_submit=False):
                 full_name = st.text_input("Full Name", placeholder="Your name", key="su_name")
