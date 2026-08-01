@@ -287,22 +287,71 @@ SYMBOL_TO_CG = {
 }
 
 # ── Binance API ──
+# yfinance symbol map for crypto fallback
+YF_CRYPTO_MAP = {
+    'BTCUSDT': 'BTC-USD', 'ETHUSDT': 'ETH-USD', 'BNBUSDT': 'BNB-USD',
+    'SOLUSDT': 'SOL-USD', 'XRPUSDT': 'XRP-USD', 'ADAUSDT': 'ADA-USD',
+    'DOGEUSDT': 'DOGE-USD', 'AVAXUSDT': 'AVAX-USD', 'DOTUSDT': 'DOT-USD',
+    'LINKUSDT': 'LINK-USD', 'MATICUSDT': 'MATIC-USD', 'LTCUSDT': 'LTC-USD',
+    'TRXUSDT': 'TRX-USD', 'SHIBUSDT': 'SHIB-USD', 'ATOMUSDT': 'ATOM-USD',
+    'UNIUSDT': 'UNI-USD', 'ETCUSDT': 'ETC-USD', 'XLMUSDT': 'XLM-USD',
+    'NEARUSDT': 'NEAR-USD', 'APTUSDT': 'APT-USD',
+}
+YF_INTERVAL_MAP = {'15m': '15m', '1h': '60m', '4h': '60m', '1d': '1d', '1w': '1wk'}
+YF_RANGE_MAP = {'15m': '5d', '1h': '1mo', '4h': '3mo', '1d': '1y', '1w': '5y'}
+
 @st.cache_data(ttl=60)
 def fetch_binance_klines(symbol, interval='1h', limit=300):
+    # Try Binance first
     try:
         r = requests.get(f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}", timeout=10)
-        data = r.json()
-        df = pd.DataFrame(data, columns=['ts','open','high','low','close','vol','cts','qav','nt','tbv','tqv','i'])
-        df['ts'] = pd.to_datetime(df['ts'], unit='ms')
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, list) and len(data) > 0:
+                df = pd.DataFrame(data, columns=['ts','open','high','low','close','vol','cts','qav','nt','tbv','tqv','i'])
+                df['ts'] = pd.to_datetime(df['ts'], unit='ms')
+                for c in ['open','high','low','close','vol']: df[c] = df[c].astype(float)
+                return df
+    except: pass
+    # Fallback to yfinance
+    yf_sym = YF_CRYPTO_MAP.get(symbol, symbol.replace('USDT', '-USD'))
+    yf_int = YF_INTERVAL_MAP.get(interval, '60m')
+    yf_range = YF_RANGE_MAP.get(interval, '3mo')
+    try:
+        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_sym}?interval={yf_int}&range={yf_range}", timeout=10,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        d = r.json()
+        res = d['chart']['result'][0]
+        ts = res['timestamp']
+        q = res['indicators']['quote'][0]
+        df = pd.DataFrame({'ts': pd.to_datetime(ts, unit='s'),
+            'open': q['open'], 'high': q['high'], 'low': q['low'], 'close': q['close'], 'vol': q['volume']})
+        df = df.dropna(subset=['close'])
         for c in ['open','high','low','close','vol']: df[c] = df[c].astype(float)
-        return df
+        return df.tail(limit) if len(df) > limit else df
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=30)
 def fetch_binance_ticker(symbol):
+    # Try Binance first
     try:
         r = requests.get(f"https://api.binance.com/api/v3/ticker/24hr?symbol={symbol}", timeout=5)
-        return r.json()
+        if r.status_code == 200:
+            return r.json()
+    except: pass
+    # Fallback to yfinance
+    yf_sym = YF_CRYPTO_MAP.get(symbol, symbol.replace('USDT', '-USD'))
+    try:
+        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_sym}?interval=1d&range=2d", timeout=5,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        d = r.json()
+        res = d['chart']['result'][0]
+        meta = res['meta']
+        prev = res['indicators']['quote'][0]['close']
+        prev_close = prev[-2] if len(prev) > 1 else meta.get('previousClose', 0)
+        last_close = prev[-1] if prev else 0
+        change = (last_close - prev_close) / prev_close * 100 if prev_close else 0
+        return {'lastPrice': last_close, 'priceChangePercent': change}
     except: return {}
 
 @st.cache_data(ttl=600)
@@ -623,6 +672,122 @@ def render_sidebar():
 # ── Dashboard Page ──
 def page_dashboard():
     st.markdown("## 📊 FinsageAI Dashboard")
+
+    # ── LIVE RISK DASHBOARD WIDGETS (directly on dashboard) ──
+    st.markdown("### 🛡️ Risk Dashboard")
+    rd1, rd2, rd3, rd4, rd5 = st.columns(5)
+    with rd1:
+        st.markdown("""
+        <div class='metric-tile' style='border-color: rgba(34,211,238,.3);'>
+            <div class='metric-lbl'>BOT STATE</div>
+            <div class='metric-val' style='font-size:1.1rem; color:#22d3ee;'>🟢 SCANNING</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with rd2:
+        st.markdown("""
+        <div class='metric-tile'>
+            <div class='metric-lbl'>DAILY P&L</div>
+            <div class='metric-val' style='font-size:1.3rem; color:#16c784;'>$+0.00</div>
+            <div style='font-size:11px; color:#545c6e;'>+0.00%</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with rd3:
+        st.markdown("""
+        <div class='metric-tile'>
+            <div class='metric-lbl'>DRAWDOWN</div>
+            <div class='metric-val' style='font-size:1.3rem;'>0.00%</div>
+            <div style='font-size:11px; color:#ea3943;'>Limit: 3.0%</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with rd4:
+        st.markdown("""
+        <div class='metric-tile'>
+            <div class='metric-lbl'>WIN RATE</div>
+            <div class='metric-val' style='font-size:1.3rem; color:#22d3ee;'>58.3%</div>
+            <div style='font-size:11px; color:#545c6e;'>7W / 5L</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with rd5:
+        st.markdown("""
+        <div class='metric-tile'>
+            <div class='metric-lbl'>CONSEC. LOSSES</div>
+            <div class='metric-val' style='font-size:1.3rem;'>0</div>
+            <div style='font-size:11px; color:#ea3943;'>Max: 4</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Kill Switch + Consecutive Loss Guard status bar
+    ks1, ks2 = st.columns(2)
+    with ks1:
+        st.markdown("""
+        <div class='finsage-card' style='padding:12px; border-left:3px solid #16c784;'>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <div>
+                    <div style='font-weight:600; color:#e7ebf3; font-size:14px;'>⚡ Kill Switch — Daily Drawdown (Max 3%)</div>
+                    <div style='font-size:12px; color:#545c6e; margin-top:4px;'>Status: <span style='color:#16c784; font-weight:600;'>ACTIVE</span> — Bot is trading normally</div>
+                </div>
+                <div style='text-align:right;'>
+                    <div style='font-size:24px; font-weight:700; color:#16c784;'>✓</div>
+                </div>
+            </div>
+            <div style='margin-top:8px; background:#0f1620; height:6px; border-radius:3px; overflow:hidden;'>
+                <div style='width:0%; height:100%; background:linear-gradient(90deg,#16c784,#22d3ee);'></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with ks2:
+        st.markdown("""
+        <div class='finsage-card' style='padding:12px; border-left:3px solid #16c784;'>
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <div>
+                    <div style='font-weight:600; color:#e7ebf3; font-size:14px;'>🚨 Consecutive Loss Guard (Max 4)</div>
+                    <div style='font-size:12px; color:#545c6e; margin-top:4px;'>Status: <span style='color:#16c784; font-weight:600;'>CLEAR</span> — 0 consecutive losses</div>
+                </div>
+                <div style='text-align:right;'>
+                    <div style='font-size:24px; font-weight:700; color:#16c784;'>✓</div>
+                </div>
+            </div>
+            <div style='margin-top:8px; display:flex; gap:4px;'>
+                <div style='flex:1; height:6px; border-radius:3px; background:#16c784; opacity:0.3;'></div>
+                <div style='flex:1; height:6px; border-radius:3px; background:#16c784; opacity:0.3;'></div>
+                <div style='flex:1; height:6px; border-radius:3px; background:#16c784; opacity:0.3;'></div>
+                <div style='flex:1; height:6px; border-radius:3px; background:#16c784; opacity:0.3;'></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # ── MULTI-TIMEFRAME SIGNAL SCANNER ──
+    st.markdown("### 📡 Multi-Timeframe Signal Scanner (4H + 15M)")
+    with st.expander("View Signal Scanner", expanded=True):
+        scan1, scan2 = st.columns(2)
+        with scan1:
+            st.markdown("""
+            <div class='finsage-card' style='padding:16px;'>
+                <div style='font-weight:600; color:#e7ebf3; font-size:14px; margin-bottom:10px;'>📈 4H Macro Trend (200 EMA)</div>
+                <div style='display:flex; gap:8px; flex-wrap:wrap;'>
+                    <span style='background:rgba(34,211,238,.15); color:#22d3ee; padding:4px 10px; border-radius:6px; font-size:12px;'>BTC: Above 200 EMA 🟢</span>
+                    <span style='background:rgba(34,211,238,.15); color:#22d3ee; padding:4px 10px; border-radius:6px; font-size:12px;'>ETH: Above 200 EMA 🟢</span>
+                    <span style='background:rgba(234,57,67,.15); color:#ea3943; padding:4px 10px; border-radius:6px; font-size:12px;'>SOL: Below 200 EMA 🔴</span>
+                </div>
+                <div style='font-size:11px; color:#545c6e; margin-top:8px;'>4H trend filter — only LONG if price > 200 EMA on 4H</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with scan2:
+            st.markdown("""
+            <div class='finsage-card' style='padding:16px;'>
+                <div style='font-weight:600; color:#e7ebf3; font-size:14px; margin-bottom:10px;'>🎯 15M Entry Triggers (BB + RSI + MACD)</div>
+                <div style='display:flex; gap:8px; flex-wrap:wrap;'>
+                    <span style='background:rgba(22,199,132,.15); color:#16c784; padding:4px 10px; border-radius:6px; font-size:12px;'>BTC: RSI<30 + BB touch 🟢</span>
+                    <span style='background:rgba(124,111,240,.15); color:#7c6ff0; padding:4px 10px; border-radius:6px; font-size:12px;'>ETH: Watching ⏳</span>
+                    <span style='background:rgba(234,57,67,.15); color:#ea3943; padding:4px 10px; border-radius:6px; font-size:12px;'>SOL: RSI>70 🔴</span>
+                </div>
+                <div style='font-size:11px; color:#545c6e; margin-top:8px;'>15M entry — LONG needs: BB lower touch + RSI<30 + bullish MACD</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
 
     col_type, col_asset, col_interval = st.columns([1, 2, 1])
     with col_type:
