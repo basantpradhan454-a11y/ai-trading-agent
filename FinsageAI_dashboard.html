@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Nexus Terminal — Pro Trading Dashboard</title>
+<title>FinsageAI — Stock · Crypto · Meme Coin Analysis</title>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -1358,7 +1358,7 @@ function AITab({ohlcv,symbol}) {
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
           <div style={{width:30,height:30,borderRadius:8,background:'var(--violet)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🤖</div>
           <div>
-            <div style={{fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--violet)'}}>Nexus AI Engine</div>
+            <div style={{fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'.1em',color:'var(--violet)'}}>FinsageAI Engine</div>
             <div style={{fontSize:10,color:'var(--faint)'}}>{symbol} · Rule-based analysis</div>
           </div>
         </div>
@@ -1444,7 +1444,7 @@ function Header({symbol,type,base,cpx}) {
     <header className="hdr">
       <div className="logo">
         <div className="logo-mark">N</div>
-        <span className="logo-name">NEXUS <span className="logo-accent">Terminal</span></span>
+        <span className="logo-name">Finsage<span className="logo-accent">AI</span></span>
       </div>
       <div className="hdr-center">
         <span className="hdr-sym">{symbol.replace('USDT','').replace(/\.(NS|BO|L|DE|T)$/,'').replace('^','')}{type==='CRYPTO'?'/USDT':''}</span>

@@ -1,5 +1,5 @@
 """
-Nexus Terminal — Institutional Trading Intelligence Engine v7.0
+FinsageAI — Stock · Crypto · Meme Coin Analysis v8.0
 Features: Crypto + Indian Markets (Nifty/Sensex) | Full TA/FA | Real-time News | Video Analysis
 Color: #0a0e14 base | #22d3ee cyan | #7c6ff0 violet | 60-30-10 rule
 """
@@ -15,8 +15,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 # ── Page Config ──
 st.set_page_config(
-    page_title="Nexus Terminal",
-    page_icon="💠",
+    page_title="FinsageAI — Trading Intelligence",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={"Get Help": None, "Report a bug": None, "About": None}
@@ -97,7 +97,7 @@ def validate_trade(action, entry, sl, tp, size_pct):
     is_valid = len(issues) == 0
     return is_valid, issues, {"risk_reward": f"1:{round(rr, 1)}"} if is_valid else {}
 
-# ── CSS: Nexus Terminal Theme (60-30-10) ──
+# ── CSS: FinsageAI Theme (60-30-10) ──
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
@@ -181,7 +181,7 @@ h1, h2, h3, h4 {
     100% { box-shadow: 0 0 0 14px rgba(34,211,238,0); }
 }
 
-.nexus-card {
+.finsage-card {
     background: rgba(18,22,31,.72);
     border: 1px solid rgba(255,255,255,.08);
     border-radius: 14px;
@@ -549,27 +549,33 @@ def page_auth():
         st.markdown("""
         <div style='text-align:center; margin-bottom:30px;'>
             <div style='font-size:2.5rem; font-weight:700; font-family:Space Grotesk,sans-serif;'>
-                Nexus <span style='background:linear-gradient(90deg,#22d3ee,#7c6ff0); -webkit-background-clip:text; background-clip:text; color:transparent;'>Terminal</span>
+                Finsage<span style='background:linear-gradient(90deg,#22d3ee,#7c6ff0); -webkit-background-clip:text; background-clip:text; color:transparent;'> AI</span>
             </div>
             <div style='color:#545c6e; font-size:0.9rem; margin-top:8px; letter-spacing:.06em; text-transform:uppercase;'>
-                Institutional Trading Intelligence Engine
+                STOCK · CRYPTO · MEME COIN ANALYSIS
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        tab_in, tab_up = st.tabs(["Sign In", "Create Account"])
+        tab_in, tab_up, tab_demo = st.tabs(["Sign In", "Create Account", "Demo Access"])
         with tab_in:
             with st.form("form_login", clear_on_submit=False):
-                password = st.text_input("Enter Access Password", placeholder="Enter password", type="password", key="li_pw")
+                li_email = st.text_input("Email", placeholder="you@example.com", key="li_email")
+                password = st.text_input("Password", placeholder="Enter password", type="password", key="li_pw")
                 submit = st.form_submit_button("Sign In", use_container_width=True)
                 if submit:
-                    if not password:
-                        st.error("Password required.")
-                    elif password == ACCESS_PASSWORD:
-                        st.session_state["user"] = {"id": "admin", "email": "admin@nexus.local", "name": "Trader", "strategy": "Balanced"}
-                        st.rerun()
+                    if not li_email or not password:
+                        st.error("Email and password required.")
                     else:
-                        st.error("Wrong password. Access denied.")
+                        db = SessionLocal()
+                        user = db.query(User).filter_by(email=li_email).first()
+                        if user and verify_pw(password, user.password_hash):
+                            st.session_state["user"] = {"id": user.id, "email": user.email, "name": user.full_name or "Trader", "strategy": user.strategy or "Balanced"}
+                            db.close()
+                            st.rerun()
+                        else:
+                            db.close()
+                            st.error("Invalid email or password.")
         with tab_up:
             with st.form("form_signup", clear_on_submit=False):
                 full_name = st.text_input("Full Name", placeholder="Your name", key="su_name")
@@ -587,15 +593,23 @@ def page_auth():
                     if errs:
                         for e in errs: st.error(e)
                     else:
-                        db = SessionLocal()
-                        if db.query(User).filter_by(email=su_email).first():
-                            st.error("Account already exists.")
-                        else:
-                            user = User(email=su_email, password_hash=hash_pw(su_pw), full_name=full_name, strategy=strategy)
-                            db.add(user); db.commit()
-                            st.session_state["user"] = {"id": user.id, "email": su_email, "name": full_name, "strategy": strategy}
-                            st.rerun()
-                        db.close()
+                        try:
+                            db = SessionLocal()
+                            if db.query(User).filter_by(email=su_email).first():
+                                st.error("Account already exists. Try signing in instead.")
+                            else:
+                                user = User(email=su_email, password_hash=hash_pw(su_pw), full_name=full_name, strategy=strategy)
+                                db.add(user); db.commit()
+                                st.session_state["user"] = {"id": user.id, "email": su_email, "name": full_name, "strategy": strategy}
+                                st.rerun()
+                            db.close()
+                        except Exception as e:
+                            st.error(f"Signup error: {str(e)}")
+        with tab_demo:
+            st.markdown("<div style='text-align:center; padding:20px; color:#8b93a7; font-size:14px;'>Quick demo access — no account needed. Explore all features instantly.</div>", unsafe_allow_html=True)
+            if st.button("🚀 Enter Demo Mode", use_container_width=True, key="demo_btn"):
+                st.session_state["user"] = {"id": "demo", "email": "demo@finsage.ai", "name": "Demo Trader", "strategy": "Balanced"}
+                st.rerun()
 
 # ── Sidebar ──
 def render_sidebar():
@@ -612,9 +626,23 @@ def render_sidebar():
         <div style='font-size:11px; color:#545c6e; margin-bottom:8px;'><span class='live-dot'></span>LIVE DATA</div>
         """, unsafe_allow_html=True)
 
-        st.markdown("**Navigation**")
-        pages = ["Dashboard", "White Paper Report", "News & Video", "Settings"]
-        for p in pages:
+        st.markdown("**📊 Core**")
+        core_pages = ["Dashboard", "News & Video", "Settings"]
+        for p in core_pages:
+            if st.button(p, key=f"nav_{p}", use_container_width=True):
+                st.session_state["page"] = p
+                st.rerun()
+
+        st.markdown("**🔬 Analysis**")
+        analysis_pages = ["AI Assistant", "Pro Analyser", "TradingView Charts", "AI Chart Analyzer", "Advanced Intel"]
+        for p in analysis_pages:
+            if st.button(p, key=f"nav_{p}", use_container_width=True):
+                st.session_state["page"] = p
+                st.rerun()
+
+        st.markdown("**🛡️ Risk & Trading**")
+        risk_pages = ["Risk Engine", "Exchange Backend", "Community", "White Paper Report", "Privacy Policy"]
+        for p in risk_pages:
             if st.button(p, key=f"nav_{p}", use_container_width=True):
                 st.session_state["page"] = p
                 st.rerun()
@@ -636,7 +664,7 @@ def render_sidebar():
 
 # ── Dashboard Page ──
 def page_dashboard():
-    st.markdown("## 📊 Nexus Dashboard")
+    st.markdown("## 📊 FinsageAI Dashboard")
 
     col_type, col_asset, col_interval = st.columns([1, 2, 1])
     with col_type:
@@ -852,7 +880,7 @@ def page_dashboard():
 
                     st.markdown("##### Project Overview")
                     desc = re.sub(r'<[^>]+>', '', cg.get('description', {}).get('en', ''))[:500]
-                    st.markdown(f"<div class='nexus-card' style='color:#8b93a7; font-size:13px; line-height:1.6;'>{desc}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='finsage-card' style='color:#8b93a7; font-size:13px; line-height:1.6;'>{desc}</div>", unsafe_allow_html=True)
 
                     links = cg.get('links', {})
                     homepage = links.get('homepage', [None])[0]
@@ -886,7 +914,7 @@ def page_dashboard():
 
                 if fund.get('desc'):
                     st.markdown("##### Company Overview")
-                    st.markdown(f"<div class='nexus-card' style='color:#8b93a7; font-size:13px; line-height:1.6;'>{fund['desc']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='finsage-card' style='color:#8b93a7; font-size:13px; line-height:1.6;'>{fund['desc']}</div>", unsafe_allow_html=True)
                 if fund.get('website'):
                     st.markdown(f"🔗 [Visit website]({fund['website']})")
             else:
@@ -944,7 +972,7 @@ def page_report():
     st.markdown("## 📄 Institutional White Paper Report")
     st.markdown("### 1. Executive Summary")
     st.markdown("""
-    <div class='nexus-card' style='color:#8b93a7; font-size:13px; line-height:1.8;'>
+    <div class='finsage-card' style='color:#8b93a7; font-size:13px; line-height:1.8;'>
     This report provides an institutional-grade analysis of the selected asset, combining technical
     indicators, fundamental data, and market sentiment into a comprehensive trading thesis.
     The analysis follows a rigorous three-layer architecture: Data Integration, Analytical Output,
@@ -980,7 +1008,7 @@ def page_report():
 
     st.markdown("### 5. Actionable Thesis")
     st.markdown("""
-    <div class='nexus-card' style='color:#8b93a7; font-size:13px; line-height:1.8;'>
+    <div class='finsage-card' style='color:#8b93a7; font-size:13px; line-height:1.8;'>
     Navigate to the Dashboard to view the live AI signal (BUY/SELL/WAIT) with confidence score,
     detailed indicator breakdown, and risk-validated trade setup. The signal is generated from
     a composite scoring model that weighs RSI, MACD, Bollinger Bands, and trend structure.
@@ -1072,7 +1100,7 @@ def page_settings():
     if keys:
         for k in keys:
             st.markdown(f"""
-            <div class='nexus-card' style='display:flex; justify-content:space-between; align-items:center;'>
+            <div class='finsage-card' style='display:flex; justify-content:space-between; align-items:center;'>
                 <div>
                     <div style='font-weight:600;'>{k.exchange.title()}</div>
                     <div style='font-size:11px; color:#545c6e;'>Added: {k.created_at.strftime('%Y-%m-%d')}</div>
@@ -1093,12 +1121,83 @@ def main():
         page = st.session_state.get("page", "Dashboard")
         if page == "Dashboard":
             page_dashboard()
-        elif page == "White Paper Report":
-            page_report()
         elif page == "News & Video":
             page_news_video()
         elif page == "Settings":
             page_settings()
+        elif page == "White Paper Report":
+            page_report()
+        elif page == "AI Assistant":
+            from advanced_features import render_ai_assistant_page
+            render_ai_assistant_page()
+        elif page == "Pro Analyser":
+            from advanced_features import render_pro_analyser_page
+            render_pro_analyser_page()
+        elif page == "TradingView Charts":
+            from advanced_features import render_tradingview_page
+            render_tradingview_page()
+        elif page == "AI Chart Analyzer":
+            from advanced_features import render_chart_analyzer_page
+            render_chart_analyzer_page()
+        elif page == "Community":
+            from advanced_features import render_community_page
+            render_community_page()
+        elif page == "Advanced Intel":
+            from advanced_features import render_advanced_intel_page
+            render_advanced_intel_page()
+        elif page == "Risk Engine":
+            from risk_engine import render_risk_engine_page
+            render_risk_engine_page()
+        elif page == "Exchange Backend":
+            from exchange_backend import render_exchange_backend_page
+            render_exchange_backend_page()
+        elif page == "Privacy Policy":
+            page_privacy()
 
 if __name__ == "__main__":
     main()
+
+# ── Privacy Policy Page ──
+def page_privacy():
+    st.markdown("## 🔒 Privacy Policy — FinsageAI")
+    st.markdown("""
+    <div class='finsage-card' style='color:#8b93a7; font-size:14px; line-height:1.8;'>
+    <h3 style='color:#e7ebf3;'>1. Data We Collect</h3>
+    <p>FinsageAI collects the following data when you create an account:</p>
+    <ul>
+        <li><b>Email address</b> — for account identification</li>
+        <li><b>Full name</b> — for personalization</li>
+        <li><b>Trading strategy preference</b> — for customized signals</li>
+        <li><b>Exchange API keys</b> — encrypted with AES-256 (Fernet) before storage</li>
+    </ul>
+
+    <h3 style='color:#e7ebf3;'>2. How We Use Your Data</h3>
+    <p>Your data is used solely to provide trading analysis, risk management, and portfolio tracking features. We never sell or share your data with third parties.</p>
+
+    <h3 style='color:#e7ebf3;'>3. API Key Security</h3>
+    <p>All exchange API keys are encrypted using Fernet (AES-128-CBC + HMAC-SHA256) before being stored in the database. Keys are never stored in plaintext and are only decrypted at the moment of use.</p>
+
+    <h3 style='color:#e7ebf3;'>4. Data Storage</h3>
+    <p>Account data is stored in a secure database. In demo mode, data is stored locally and cleared when you log out.</p>
+
+    <h3 style='color:#e7ebf3;'>5. Third-Party Services</h3>
+    <p>FinsageAI integrates with the following third-party APIs for market data:</p>
+    <ul>
+        <li>Binance API — for cryptocurrency price data</li>
+        <li>CoinGecko API — for crypto fundamentals</li>
+        <li>Yahoo Finance API — for stock/index data</li>
+        <li>Google Gemini AI — for AI-powered analysis (optional)</li>
+    </ul>
+
+    <h3 style='color:#e7ebf3;'>6. Your Rights</h3>
+    <p>You can request deletion of your account and all associated data at any time. Use the Logout button to clear your session.</p>
+
+    <h3 style='color:#e7ebf3;'>7. Risk Disclosure</h3>
+    <p>FinsageAI is an analysis tool, not financial advice. Trading involves risk of loss. Always do your own research and never invest more than you can afford to lose.</p>
+
+    <h3 style='color:#e7ebf3;'>8. Contact</h3>
+    <p>For privacy concerns, contact: admin@finsage.ai</p>
+
+    <p style='color:#545c6e; margin-top:20px; font-size:12px;'>Last updated: August 2026</p>
+    </div>
+    """, unsafe_allow_html=True)

@@ -1,4 +1,4 @@
-# AI Trading Agent (demo-first)
+# FinsageAI (demo-first)
 
 An execution-tool-style trading dashboard: live market data via CCXT, RSI/EMA/volume
 signal generation, a **non-negotiable risk validation layer** (position size ≤5%,
